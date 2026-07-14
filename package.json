@@ -1,0 +1,16 @@
+{
+  "name": "antigravity-stream-sniffer",
+  "version": "1.0.0",
+  "description": "Secure Chrome Extension network sniffer",
+  "main": "background.js",
+  "scripts": {
+    "build": "tailwindcss -i ./input.css -o ./styles.css"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.1"
+  },
+  "dependencies": {
+    "dashjs": "^5.2.0",
+    "hls.js": "^1.6.16"
+  }
+}

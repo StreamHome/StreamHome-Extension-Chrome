@@ -1,0 +1,1790 @@
+// State management
+let savedServerUrl = 'http://localhost:8000';
+let savedApiKey = '';
+let savedTmdbApiKey = '';
+let scannedTasks = [];
+let activeTaskId = null;
+
+// Page selection states
+let activeView = 'dashboard';
+let currentTaskId = null;
+let currentStreamItem = null;
+let currentTaskContext = null;
+let selectedStreamUrl = null;
+let selectedAudioUrl = null;
+
+// Create Task search variables
+let selectedTmdbId = null;
+let selectedTitle = '';
+let selectedContentType = 'movie';
+let selectedQuality = '';
+let availableStreams = {};
+let availableAudios = {};
+let availableVideos = {};
+let availableSubtitles = [];
+
+let searchDebounceTimer = null;
+
+const COOKIE_URL = 'http://localhost/';
+
+function getCookies() {
+  return new Promise((resolve) => {
+    if (typeof chrome !== 'undefined' && chrome.cookies) {
+      chrome.cookies.get({ url: COOKIE_URL, name: 'serverHostUrl' }, (c1) => {
+        chrome.cookies.get({ url: COOKIE_URL, name: 'serverApiKey' }, (c2) => {
+          chrome.cookies.get({ url: COOKIE_URL, name: 'tmdbApiKey' }, (c3) => {
+            resolve({
+              serverUrl: c1 ? decodeURIComponent(c1.value) : null,
+              apiKey: c2 ? decodeURIComponent(c2.value) : null,
+              tmdbApiKey: c3 ? decodeURIComponent(c3.value) : null
+            });
+          });
+        });
+      });
+    } else {
+      chrome.storage.local.get(['serverUrl', 'apiKey', 'tmdbApiKey'], (result) => {
+        resolve({
+          serverUrl: result.serverUrl || null,
+          apiKey: result.apiKey || null,
+          tmdbApiKey: result.tmdbApiKey || null
+        });
+      });
+    }
+  });
+}
+
+function setCookie(name, value) {
+  return new Promise((resolve) => {
+    if (typeof chrome !== 'undefined' && chrome.cookies) {
+      const expiration = Math.round(Date.now() / 1000) + (365 * 24 * 60 * 60 * 5);
+      chrome.cookies.set({
+        url: COOKIE_URL,
+        name: name,
+        value: encodeURIComponent(value),
+        expirationDate: expiration
+      }, () => {
+        resolve();
+      });
+    } else {
+      const data = {};
+      const key = name === 'serverHostUrl' ? 'serverUrl' : name;
+      data[key] = value;
+      chrome.storage.local.set(data, () => {
+        resolve();
+      });
+    }
+  });
+}
+
+function removeCookie(name) {
+  return new Promise((resolve) => {
+    if (typeof chrome !== 'undefined' && chrome.cookies) {
+      chrome.cookies.remove({ url: COOKIE_URL, name: name }, () => { resolve(); });
+    } else {
+      const key = name === 'serverHostUrl' ? 'serverUrl' : name;
+      chrome.storage.local.remove([key], () => { resolve(); });
+    }
+  });
+}
+
+// Globally scoped DOM Cache variables
+let errorToast, errorMessage, closeToast;
+let pageAuth, pageDashboard, pageCreateTask, pageTaskStreams, pagePlayerDeploy, pageTvDetails;
+let inputServerUrl, inputApiKey, inputTmdbApiKey, btnVerifyConnect;
+let btnDashboardSettings, btnCreateTask, tasksContainer, dashboardEmptyState;
+let inputTaskSearch, tmdbSuggestions, taskTypeIndicatorWrapper, taskTypeIndicator;
+let taskEpisodicInputsWrapper, inputTaskSeason, inputTaskEpisode, btnCancelTask, btnSaveTask;
+let btnStreamsBack, streamsPageTitle, streamsPageMeta, btnStreamsActivate, streamsListContainer;
+let btnTvBack, tvShowTitle, tvShowMeta, tvSeasonsContainer, tvEpisodesContainer;
+let streamsFooter, btnDeployTagged;
+
+let btnPlayerBack, playerPageTitle, playerPageMeta, displayStreamUrl;
+let playerMetaTmdb, playerMetaType;
+let btnDeployServer, btnDownloadStream, btnPreviewStream, iconDeployState, textDeployState;
+let qualitySelector, languageSelector, audioSelector, audioSelectorWrapper, subtitlesWrapper, subtitlesList;
+let deploySeasonInput, deployEpisodeInput, deployEpisodicInputsWrapper;
+let customVideoInput, customAudioInput;
+
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  errorToast = document.getElementById('error-toast');
+  errorMessage = document.getElementById('error-message');
+  closeToast = document.getElementById('close-toast');
+
+  pageAuth = document.getElementById('page-auth');
+  pageDashboard = document.getElementById('page-dashboard');
+  pageCreateTask = document.getElementById('page-create-task');
+  pageTaskStreams = document.getElementById('page-task-streams');
+  pagePlayerDeploy = document.getElementById('page-player-deploy');
+  pageTvDetails = document.getElementById('page-tv-details');
+
+  inputServerUrl = document.getElementById('input-server-url');
+  inputApiKey = document.getElementById('input-api-key');
+  inputTmdbApiKey = document.getElementById('input-tmdb-api-key');
+  btnVerifyConnect = document.getElementById('btn-verify-connect');
+
+  btnDashboardSettings = document.getElementById('btn-dashboard-settings');
+  btnCreateTask = document.getElementById('btn-create-task');
+  tasksContainer = document.getElementById('tasks-container');
+  dashboardEmptyState = document.getElementById('dashboard-empty-state');
+
+  inputTaskSearch = document.getElementById('input-task-search');
+  tmdbSuggestions = document.getElementById('tmdb-suggestions');
+  taskTypeIndicatorWrapper = document.getElementById('task-type-indicator-wrapper');
+  taskTypeIndicator = document.getElementById('task-type-indicator');
+  taskEpisodicInputsWrapper = document.getElementById('task-episodic-inputs-wrapper');
+  inputTaskSeason = document.getElementById('input-task-season');
+  inputTaskEpisode = document.getElementById('input-task-episode');
+  btnCancelTask = document.getElementById('btn-cancel-task');
+  btnSaveTask = document.getElementById('btn-save-task');
+
+  btnStreamsBack = document.getElementById('btn-streams-back');
+  streamsPageTitle = document.getElementById('streams-page-title');
+  streamsPageMeta = document.getElementById('streams-page-meta');
+  btnStreamsActivate = document.getElementById('btn-streams-activate');
+  streamsListContainer = document.getElementById('streams-list-container');
+  streamsFooter = document.getElementById('streams-footer');
+  btnDeployTagged = document.getElementById('btn-deploy-tagged');
+
+  btnTvBack = document.getElementById('btn-tv-back');
+  tvShowTitle = document.getElementById('tv-show-title');
+  tvShowMeta = document.getElementById('tv-show-meta');
+  tvSeasonsContainer = document.getElementById('tv-seasons-container');
+  tvEpisodesContainer = document.getElementById('tv-episodes-container');
+
+  btnPlayerBack = document.getElementById('btn-player-back');
+  playerPageTitle = document.getElementById('player-page-title');
+  playerPageMeta = document.getElementById('player-page-meta');
+  displayStreamUrl = document.getElementById('display-stream-url');
+  playerMetaTmdb = document.getElementById('player-meta-tmdb');
+  playerMetaType = document.getElementById('player-meta-type');
+  btnDeployServer = document.getElementById('btn-deploy-server');
+  btnPreviewStream = document.getElementById('btn-preview-stream');
+  btnDownloadStream = document.getElementById('btn-download-stream');
+  iconDeployState = document.getElementById('icon-deploy-state');
+  textDeployState = document.getElementById('text-deploy-state');
+  qualitySelector = document.getElementById('quality-selector');
+  audioSelector = document.getElementById('audio-selector');
+  languageSelector = document.getElementById('language-selector');
+  audioSelectorWrapper = document.getElementById('audio-selector-wrapper');
+  subtitlesWrapper = document.getElementById('subtitles-wrapper');
+  subtitlesList = document.getElementById('subtitles-list');
+  deploySeasonInput = document.getElementById('deploy-season-input');
+  deployEpisodeInput = document.getElementById('deploy-episode-input');
+  deployEpisodicInputsWrapper = document.getElementById('deploy-episodic-inputs-wrapper');
+  customVideoInput = document.getElementById('custom-video-input');
+  customAudioInput = document.getElementById('custom-audio-input');
+
+  if (closeToast) closeToast.addEventListener('click', hideToast);
+  if (btnVerifyConnect) btnVerifyConnect.addEventListener('click', verifyAndConnect);
+  if (btnDashboardSettings) btnDashboardSettings.addEventListener('click', disconnectCredentials);
+  if (btnCreateTask) btnCreateTask.addEventListener('click', openCreateTaskPanel);
+  if (btnCancelTask) btnCancelTask.addEventListener('click', cancelCreateTask);
+  if (btnSaveTask) btnSaveTask.addEventListener('click', saveNewTask);
+  if (btnStreamsBack) btnStreamsBack.addEventListener('click', navigateBackFromStreams);
+  if (btnTvBack) btnTvBack.addEventListener('click', onTvBackClick);
+  if (btnDeployTagged) btnDeployTagged.addEventListener('click', onDeployTaggedClick);
+  if (btnPlayerBack) btnPlayerBack.addEventListener('click', navigateBackToStreams);
+  if (btnDownloadStream) btnDownloadStream.addEventListener('click', triggerStreamDownloads);
+  if (btnPreviewStream) btnPreviewStream.addEventListener('click', onPreviewClick);
+  if (btnDeployServer) btnDeployServer.addEventListener('click', deployMetadataPayload);
+  if (qualitySelector) qualitySelector.addEventListener('change', (e) => onQualityChange(e.target.value));
+  if (audioSelector) {
+    audioSelector.addEventListener('change', (e) => {
+      selectedAudioUrl = e.target.value;
+      chrome.storage.local.set({ selectedAudioUrl: selectedAudioUrl });
+    });
+  }
+
+
+  initAutocompleteSearch();
+
+  getCookies().then((cookies) => {
+    if (cookies.serverUrl) {
+      savedServerUrl = cookies.serverUrl;
+      inputServerUrl.value = savedServerUrl;
+    }
+    if (cookies.apiKey) {
+      savedApiKey = cookies.apiKey;
+      inputApiKey.value = savedApiKey;
+      savedTmdbApiKey = cookies.tmdbApiKey || '';
+      inputTmdbApiKey.value = savedTmdbApiKey;
+
+      chrome.storage.local.get(['activeTaskId', 'activeView', 'currentTaskId', 'currentStreamItem', 'selectedStreamUrl', 'selectedAudioUrl'], (result) => {
+        activeTaskId = result.activeTaskId || null;
+        currentTaskId = result.currentTaskId || null;
+        const targetView = result.activeView || 'dashboard';
+
+        if (targetView === 'playerDeploy') {
+          chrome.storage.local.get(['scanned_tasks'], (taskRes) => {
+            const tasks = taskRes.scanned_tasks || [];
+            const task = tasks.find(t => t.id == currentTaskId);
+            if (task && result.currentStreamItem) {
+              let rawUrls = task.rawStreams || [];
+              let renderTask = task;
+              if (task.type === 'series') {
+                const season = task.activeSeason || 1;
+                const episode = task.activeEpisode || 1;
+                const epKey = `${season}x${episode}`;
+                if (task.episodes && task.episodes[epKey]) {
+                  rawUrls = task.episodes[epKey].rawStreams || [];
+                }
+                renderTask = {
+                  id: task.id,
+                  title: task.title,
+                  type: task.type,
+                  season: season,
+                  episode: episode,
+                  rawStreams: rawUrls,
+                  favorites: (task.episodes && task.episodes[epKey]) ? (task.episodes[epKey].favorites || []) : [],
+                  taggedVideoUrl: (task.episodes && task.episodes[epKey]) ? task.episodes[epKey].taggedVideoUrl : null,
+                  taggedAudioUrl: (task.episodes && task.episodes[epKey]) ? task.episodes[epKey].taggedAudioUrl : null,
+                  capturedHeaders: task.capturedHeaders || {},
+                  streamQualities: task.streamQualities || {}
+                };
+              }
+              
+              currentStreamItem = result.currentStreamItem;
+              selectedStreamUrl = result.selectedStreamUrl;
+              selectedAudioUrl = result.selectedAudioUrl;
+              
+              openPlayerDeployPage(renderTask, currentStreamItem, rawUrls);
+            } else {
+              switchView('dashboard');
+            }
+          });
+        } else if (targetView === 'tvDetails') {
+          chrome.storage.local.get(['scanned_tasks'], (taskRes) => {
+            const tasks = taskRes.scanned_tasks || [];
+            const task = tasks.find(t => t.id == currentTaskId);
+            if (task) {
+              openTvDetailsPage(task);
+            } else {
+              switchView('dashboard');
+            }
+          });
+        } else {
+          switchView(targetView);
+        }
+      });
+    } else {
+      switchView('auth');
+    }
+  });
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local') {
+      if (changes.scanned_tasks) {
+        scannedTasks = changes.scanned_tasks.newValue || [];
+        if (activeView === 'dashboard') {
+          renderDashboardTasks();
+        } else if (activeView === 'taskStreams') {
+          const currentTask = scannedTasks.find(t => t.id == currentTaskId);
+          if (currentTask) {
+            chrome.storage.local.get(['learned_patterns'], (pRes) => {
+              const renderTask = getScopedTaskForRendering(currentTask);
+              renderGroupedStreams(renderTask, pRes.learned_patterns);
+            });
+          }
+        }
+      }
+      if (changes.activeTaskId) {
+        activeTaskId = changes.activeTaskId.newValue || null;
+        if (activeView === 'dashboard') {
+          renderDashboardTasks();
+        } else if (activeView === 'taskStreams') {
+          const isActive = (currentTaskId == activeTaskId);
+          updateStreamsActivateButton(isActive);
+        }
+      }
+    }
+  });
+});
+
+function switchView(target) {
+  // If the DOM is not ready yet, wait for it before switching views.
+  if (!pageAuth) {
+    document.addEventListener('DOMContentLoaded', () => switchView(target));
+    return;
+  }
+
+  activeView = target;
+  chrome.storage.local.set({ activeView: activeView, currentTaskId: currentTaskId });
+
+  const views = {
+    auth: pageAuth,
+    dashboard: pageDashboard,
+    createTask: pageCreateTask,
+    taskStreams: pageTaskStreams,
+    playerDeploy: pagePlayerDeploy,
+    tvDetails: pageTvDetails
+  };
+
+  Object.keys(views).forEach(key => {
+    const view = views[key];
+    if (!view) return;
+    try {
+      if (key === target) {
+        view.classList.remove('view-hidden');
+        view.classList.add('view-visible');
+      } else {
+        view.classList.remove('view-visible');
+        view.classList.add('view-hidden');
+      }
+    } catch (e) {
+      console.error(`Error switching view to '${key}':`, e);
+    }
+  });
+
+  if (target === 'dashboard') {
+    loadDashboardPage();
+  } else if (target === 'taskStreams') {
+    loadTaskStreamsPage();
+  }
+}
+
+function displayError(msg) {
+  if (errorMessage && errorToast) {
+    errorMessage.textContent = msg;
+    errorToast.classList.remove('-translate-y-full');
+    setTimeout(() => { hideToast(); }, 4000);
+  }
+}
+
+function hideToast() {
+  if (errorToast) errorToast.classList.add('-translate-y-full');
+}
+
+async function verifyAndConnect() {
+  const serverVal = inputServerUrl.value.trim().replace(/\/$/, "");
+  const apiVal = inputApiKey.value.trim();
+  const tmdbVal = inputTmdbApiKey.value.trim();
+
+  if (!serverVal) { displayError('Please specify a valid backend server URL.'); return; }
+  if (!apiVal) { displayError('Authenticating credentials/API key cannot be empty.'); return; }
+  if (!tmdbVal) { displayError('TMDB API Key (v3) cannot be empty.'); return; }
+
+  savedServerUrl = serverVal;
+  savedApiKey = apiVal;
+  savedTmdbApiKey = tmdbVal;
+
+  await setCookie('serverHostUrl', savedServerUrl);
+  await setCookie('serverApiKey', savedApiKey);
+  await setCookie('tmdbApiKey', savedTmdbApiKey);
+
+  chrome.storage.local.set({ 
+    serverUrl: savedServerUrl, 
+    apiKey: savedApiKey,
+    tmdbApiKey: savedTmdbApiKey
+  }, () => { switchView('dashboard'); });
+}
+
+async function disconnectCredentials() {
+  await removeCookie('serverHostUrl');
+  await removeCookie('serverApiKey');
+  await removeCookie('tmdbApiKey');
+
+  chrome.storage.local.remove(['apiKey', 'serverUrl', 'tmdbApiKey'], () => {
+    savedApiKey = '';
+    inputApiKey.value = '';
+    switchView('auth');
+  });
+}
+
+function loadDashboardPage() {
+  chrome.storage.local.get(['scanned_tasks', 'activeTaskId'], (result) => {
+    scannedTasks = result.scanned_tasks || [];
+    activeTaskId = result.activeTaskId || null;
+    renderDashboardTasks();
+  });
+}
+
+function renderDashboardTasks() {
+  if (!tasksContainer) return;
+  tasksContainer.innerHTML = '';
+
+  if (scannedTasks.length === 0) {
+    dashboardEmptyState.style.display = 'flex';
+    return;
+  }
+
+  dashboardEmptyState.style.display = 'none';
+
+  scannedTasks.forEach((task) => {
+    const card = document.createElement('div');
+    const isActive = (task.id == activeTaskId);
+    const borderCls = isActive ? 'border-emerald-500/50 shadow-lg shadow-emerald-500/5' : 'border-slate-800 hover:border-slate-700/80';
+
+    card.className = `bg-[#1E293B] border p-4.5 rounded-xl transition-all duration-200 ${borderCls} flex flex-col gap-2 relative overflow-hidden group cursor-pointer`;
+    card.innerHTML = `
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-lg ${isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700/60'} flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+            </svg>
+          </div>
+          <div class="flex flex-col min-w-0">
+            <span class="font-bold text-sm text-slate-100 truncate max-w-[220px] group-hover:text-cyan-300 transition-colors">${task.title}</span>
+            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">${task.type} ${isActive ? '· Catching Active' : ''}</span>
+          </div>
+        </div>
+        <button class="btn-delete-task text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-850 transition-colors focus:outline-none" title="Delete Task">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>
+      </div>
+    `;
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-delete-task')) return;
+      currentTaskId = task.id;
+      if (task.type === 'series') {
+        openTvDetailsPage(task);
+      } else {
+        switchView('taskStreams');
+      }
+    });
+
+    const btnDelete = card.querySelector('.btn-delete-task');
+    btnDelete.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteTask(task.id);
+    });
+
+    tasksContainer.appendChild(card);
+  });
+}
+
+function deleteTask(id) {
+  chrome.storage.local.get(['scanned_tasks', 'activeTaskId'], (result) => {
+    let tasks = result.scanned_tasks || [];
+    let activeId = result.activeTaskId;
+
+    tasks = tasks.filter(t => t.id != id);
+    if (activeId == id) {
+      activeId = null;
+      chrome.action.setBadgeText({ text: '' });
+    }
+    chrome.storage.local.set({ scanned_tasks: tasks, activeTaskId: activeId }, () => { loadDashboardPage(); });
+  });
+}
+
+function getStreamSignature(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace('www.', '');
+    const extMatch = parsed.pathname.match(/\.(m3u8|mpd|mp4|mkv|webm|m4a|mp3|aac|ogg|wav|flac)$/i);
+    const ext = extMatch ? extMatch[1].toLowerCase() : '';
+    return ext ? `${host}|.${ext}` : host;
+  } catch (e) {
+    return null;
+  }
+}
+
+function toggleFavorite(taskId, url) {
+  chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    let patterns = result.learned_patterns || { video_patterns: [], audio_patterns: [], favorite_patterns: [] };
+    const taskIndex = tasks.findIndex(t => t.id == taskId);
+    if (taskIndex === -1) return;
+
+    const task = tasks[taskIndex];
+    let isAdding = false;
+
+    if (task.type === 'series') {
+      const season = task.activeSeason || 1;
+      const episode = task.activeEpisode || 1;
+      const epKey = `${season}x${episode}`;
+      task.episodes = task.episodes || {};
+      task.episodes[epKey] = task.episodes[epKey] || { rawStreams: [], favorites: [] };
+      const epData = task.episodes[epKey];
+      epData.favorites = epData.favorites || [];
+      const favIndex = epData.favorites.indexOf(url);
+      if (favIndex === -1) {
+        epData.favorites.push(url);
+        isAdding = true;
+      } else {
+        epData.favorites.splice(favIndex, 1);
+      }
+    } else {
+      task.favorites = task.favorites || [];
+      const favIndex = task.favorites.indexOf(url);
+      if (favIndex === -1) {
+        task.favorites.push(url);
+        isAdding = true;
+      } else {
+        task.favorites.splice(favIndex, 1);
+      }
+    }
+
+    const sig = getStreamSignature(url);
+    if (sig) {
+      if (isAdding) {
+        if (!patterns.favorite_patterns.includes(sig)) patterns.favorite_patterns.push(sig);
+      } else {
+        patterns.favorite_patterns = patterns.favorite_patterns.filter(p => p !== sig);
+      }
+    }
+    chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns });
+  });
+}
+
+function toggleTaggedVideo(taskId, url) {
+  chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    let patterns = result.learned_patterns || { video_patterns: [], audio_patterns: [], favorite_patterns: [] };
+    const taskIndex = tasks.findIndex(t => t.id == taskId);
+    if (taskIndex === -1) return;
+
+    const task = tasks[taskIndex];
+    let isAdding = false;
+    let oldUrl = null;
+
+    if (task.type === 'series') {
+      const season = task.activeSeason || 1;
+      const episode = task.activeEpisode || 1;
+      const epKey = `${season}x${episode}`;
+      task.episodes = task.episodes || {};
+      task.episodes[epKey] = task.episodes[epKey] || { rawStreams: [] };
+      const epData = task.episodes[epKey];
+      if (epData.taggedVideoUrl === url) {
+        epData.taggedVideoUrl = null;
+      } else {
+        oldUrl = epData.taggedVideoUrl;
+        epData.taggedVideoUrl = url;
+        isAdding = true;
+      }
+    } else {
+      if (task.taggedVideoUrl === url) {
+        task.taggedVideoUrl = null;
+      } else {
+        oldUrl = task.taggedVideoUrl;
+        task.taggedVideoUrl = url;
+        isAdding = true;
+      }
+    }
+
+    const sig = getStreamSignature(url);
+    if (sig) {
+      if (isAdding) {
+        if (!patterns.video_patterns.includes(sig)) patterns.video_patterns.push(sig);
+        if (oldUrl) {
+           const oldSig = getStreamSignature(oldUrl);
+           if (oldSig) patterns.video_patterns = patterns.video_patterns.filter(p => p !== oldSig);
+        }
+      } else {
+        patterns.video_patterns = patterns.video_patterns.filter(p => p !== sig);
+      }
+    }
+    chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns });
+  });
+}
+
+function toggleTaggedAudio(taskId, url) {
+  chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    let patterns = result.learned_patterns || { video_patterns: [], audio_patterns: [], favorite_patterns: [] };
+    const taskIndex = tasks.findIndex(t => t.id == taskId);
+    if (taskIndex === -1) return;
+
+    const task = tasks[taskIndex];
+    let isAdding = false;
+    let oldUrl = null;
+
+    if (task.type === 'series') {
+      const season = task.activeSeason || 1;
+      const episode = task.activeEpisode || 1;
+      const epKey = `${season}x${episode}`;
+      task.episodes = task.episodes || {};
+      task.episodes[epKey] = task.episodes[epKey] || { rawStreams: [] };
+      const epData = task.episodes[epKey];
+      if (epData.taggedAudioUrl === url) {
+        epData.taggedAudioUrl = null;
+      } else {
+        oldUrl = epData.taggedAudioUrl;
+        epData.taggedAudioUrl = url;
+        isAdding = true;
+      }
+    } else {
+      if (task.taggedAudioUrl === url) {
+        task.taggedAudioUrl = null;
+      } else {
+        oldUrl = task.taggedAudioUrl;
+        task.taggedAudioUrl = url;
+        isAdding = true;
+      }
+    }
+
+    const sig = getStreamSignature(url);
+    if (sig) {
+      if (isAdding) {
+        if (!patterns.audio_patterns.includes(sig)) patterns.audio_patterns.push(sig);
+        if (oldUrl) {
+           const oldSig = getStreamSignature(oldUrl);
+           if (oldSig) patterns.audio_patterns = patterns.audio_patterns.filter(p => p !== oldSig);
+        }
+      } else {
+        patterns.audio_patterns = patterns.audio_patterns.filter(p => p !== sig);
+      }
+    }
+    chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns });
+  });
+}
+
+function findStreamItem(task, url) {
+  if (!url) return null;
+  
+  let rawUrls = [];
+  if (task.type === 'series') {
+    const season = task.activeSeason || 1;
+    const episode = task.activeEpisode || 1;
+    const epKey = `${season}x${episode}`;
+    if (task.episodes && task.episodes[epKey]) {
+      rawUrls = task.episodes[epKey].rawStreams || [];
+    }
+  } else {
+    rawUrls = task.rawStreams || [];
+  }
+  
+  const { video, audio } = processRawStreams(rawUrls, task);
+  
+  // Search in video categories
+  for (const res in video) {
+    const found = video[res].find(item => (item.videoUrl || item.audioUrl) === url);
+    if (found) return found;
+  }
+  
+  // Search in audio
+  const foundAudio = audio.find(item => (item.videoUrl || item.audioUrl) === url);
+  if (foundAudio) return foundAudio;
+  
+  return null;
+}
+
+function openCreateTaskPanel() {
+  switchView('createTask');
+  inputTaskSearch.value = '';
+  tmdbSuggestions.innerHTML = '';
+  tmdbSuggestions.classList.add('hidden');
+  taskTypeIndicatorWrapper.classList.add('hidden');
+  taskEpisodicInputsWrapper.classList.add('hidden');
+  taskEpisodicInputsWrapper.style.maxHeight = '0px';
+  inputTaskSeason.value = '';
+  inputTaskEpisode.value = '';
+  selectedTmdbId = null;
+  selectedTitle = '';
+  selectedContentType = 'movie';
+}
+
+function cancelCreateTask() { switchView('dashboard'); }
+
+function initAutocompleteSearch() {
+  if (!inputTaskSearch) return;
+  inputTaskSearch.addEventListener('input', () => {
+    clearTimeout(searchDebounceTimer);
+    const query = inputTaskSearch.value.trim();
+    if (query.length < 2) {
+      tmdbSuggestions.innerHTML = '';
+      tmdbSuggestions.classList.add('hidden');
+      return;
+    }
+    searchDebounceTimer = setTimeout(() => { fetchTmdbSuggestions(query); }, 300);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target !== inputTaskSearch && e.target !== tmdbSuggestions) {
+      tmdbSuggestions.classList.add('hidden');
+    }
+  });
+}
+
+async function fetchTmdbSuggestions(query) {
+  if (!savedTmdbApiKey) { displayError('TMDB API Key missing. Please reconnect credentials.'); return; }
+  const url = `https://api.themoviedb.org/3/search/multi?api_key=${savedTmdbApiKey}&query=${encodeURIComponent(query)}&language=en-US`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`TMDB Search failed with status ${response.status}`);
+    const data = await response.json();
+    renderTmdbSuggestions(data.results || []);
+  } catch (err) {
+    console.error("[DEBUG] TMDB Fetch Error:", err);
+    displayError('Failed to search TMDB titles.');
+  }
+}
+
+function renderTmdbSuggestions(results) {
+  tmdbSuggestions.innerHTML = '';
+  const filtered = results.filter(item => item.media_type === 'movie' || item.media_type === 'tv').slice(0, 6);
+  if (filtered.length === 0) { tmdbSuggestions.classList.add('hidden'); return; }
+
+  filtered.forEach((item) => {
+    const isTv = (item.media_type === 'tv');
+    const title = isTv ? item.name : item.title;
+    const releaseDate = isTv ? item.first_air_date : item.release_date;
+    const year = releaseDate ? releaseDate.substring(0, 4) : 'N/A';
+
+    const row = document.createElement('div');
+    row.className = 'p-2.5 hover:bg-slate-800 cursor-pointer text-xs text-slate-200 transition-colors';
+    row.textContent = `${title} (${year})`;
+    row.addEventListener('click', () => { selectTmdbItem(item, title, year); });
+    tmdbSuggestions.appendChild(row);
+  });
+  tmdbSuggestions.classList.remove('hidden');
+}
+
+function selectTmdbItem(item, title, year) {
+  inputTaskSearch.value = `${title} (${year})`;
+  tmdbSuggestions.innerHTML = '';
+  tmdbSuggestions.classList.add('hidden');
+
+  selectedTmdbId = item.id;
+  selectedTitle = title;
+  selectedContentType = (item.media_type === 'tv') ? 'series' : 'movie';
+
+  taskTypeIndicator.textContent = selectedContentType === 'series' ? 'TV / Series' : 'Movie';
+  taskTypeIndicatorWrapper.classList.remove('hidden');
+  toggleCreateTaskType(selectedContentType);
+}
+
+function toggleCreateTaskType(type) {
+  if (type === 'movie') {
+    taskEpisodicInputsWrapper.classList.remove('opacity-100', 'pointer-events-auto');
+    taskEpisodicInputsWrapper.classList.add('opacity-0', 'pointer-events-none');
+    taskEpisodicInputsWrapper.style.maxHeight = '0px';
+    inputTaskSeason.removeAttribute('required');
+    inputTaskEpisode.removeAttribute('required');
+  } else {
+    taskEpisodicInputsWrapper.classList.remove('opacity-0', 'pointer-events-none');
+    taskEpisodicInputsWrapper.classList.add('opacity-100', 'pointer-events-auto');
+    taskEpisodicInputsWrapper.style.maxHeight = '100px';
+    inputTaskSeason.setAttribute('required', 'true');
+    inputTaskEpisode.setAttribute('required', 'true');
+  }
+}
+
+function saveNewTask() {
+  if (!selectedTmdbId || !selectedTitle) { displayError('Please select a valid title from TMDB suggestions.'); return; }
+  let season = null;
+  let episode = null;
+  // Season and episode inputs are moved to the deploy page.
+  // if (selectedContentType === 'series') {
+  //   season = parseInt(inputTaskSeason.value, 10);
+  //   episode = parseInt(inputTaskEpisode.value, 10);
+  //   if (isNaN(season) || season < 1 || isNaN(episode) || episode < 1) {
+  //     displayError('Please specify valid season and episode values.');
+  //     return;
+  //   }
+  // }
+
+  const newTask = {
+    id: selectedTmdbId,
+    title: selectedTitle,
+    type: selectedContentType,
+    season: season,
+    episode: episode,
+    status: 'Awaiting Traffic',
+    rawStreams: [],
+    streams: { combined: [], videoOnly: [], audioOnly: [] }
+  };
+
+  chrome.storage.local.get(['scanned_tasks'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    const duplicateIndex = tasks.findIndex(t => t.id == newTask.id && t.season === newTask.season && t.episode === newTask.episode);
+    if (duplicateIndex !== -1) { displayError('A task with this ID and episode targets already exists.'); return; }
+
+    tasks.push(newTask);
+    chrome.storage.local.set({ scanned_tasks: tasks }, () => { switchView('dashboard'); });
+  });
+}
+
+function navigateBackToDashboard() { switchView('dashboard'); }
+
+function getScopedTaskForRendering(task) {
+  if (!task) return null;
+  if (task.type !== 'series') return task;
+
+  const season = task.activeSeason || 1;
+  const episode = task.activeEpisode || 1;
+  const epKey = `${season}x${episode}`;
+  task.episodes = task.episodes || {};
+  task.episodes[epKey] = task.episodes[epKey] || {
+    rawStreams: [],
+    favorites: [],
+    taggedVideoUrl: null,
+    taggedAudioUrl: null
+  };
+
+  return {
+    id: task.id,
+    title: task.title,
+    type: task.type,
+    season: season,
+    episode: episode,
+    rawStreams: task.episodes[epKey].rawStreams || [],
+    favorites: task.episodes[epKey].favorites || [],
+    taggedVideoUrl: task.episodes[epKey].taggedVideoUrl || null,
+    taggedAudioUrl: task.episodes[epKey].taggedAudioUrl || null,
+    capturedHeaders: task.capturedHeaders || {},
+    streamQualities: task.streamQualities || {}
+  };
+}
+
+function loadTaskStreamsPage() {
+  chrome.storage.local.get(['scanned_tasks', 'activeTaskId', 'learned_patterns'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    activeTaskId = result.activeTaskId || null;
+
+    const task = tasks.find(t => t.id == currentTaskId);
+    if (!task) { switchView('dashboard'); return; }
+
+    streamsPageTitle.textContent = task.title;
+    let metaText = `TMDB: ${task.id} · TYPE: ${task.type.toUpperCase()}`;
+    
+    if (task.type === 'series') {
+      const season = task.activeSeason || 1;
+      const episode = task.activeEpisode || 1;
+      metaText += ` · S${season.toString().padStart(2, '0')}E${episode.toString().padStart(2, '0')}`;
+    }
+    streamsPageMeta.textContent = metaText;
+
+    const isActive = (task.id == activeTaskId);
+    updateStreamsActivateButton(isActive);
+
+    btnStreamsActivate.onclick = () => { toggleActiveSessionInStreams(task.id); };
+    
+    const renderTask = getScopedTaskForRendering(task);
+    renderGroupedStreams(renderTask, result.learned_patterns);
+  });
+}
+
+function updateStreamsActivateButton(isActive) {
+  if (!btnStreamsActivate) return;
+  if (isActive) {
+    btnStreamsActivate.className = 'flex-shrink-0 px-2.5 py-1 text-[9px] font-bold rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 focus:outline-none';
+    btnStreamsActivate.textContent = 'Active Sniffing';
+  } else {
+    btnStreamsActivate.className = 'flex-shrink-0 px-2.5 py-1 text-[9px] font-bold rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-400 hover:text-white focus:outline-none';
+    btnStreamsActivate.textContent = 'Activate Sniff';
+  }
+}
+
+function toggleActiveSessionInStreams(id) {
+  const newActiveId = (activeTaskId == id) ? null : id;
+  chrome.storage.local.get(['scanned_tasks'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    if (newActiveId === null) {
+      chrome.action.setBadgeText({ text: '' });
+      chrome.storage.local.set({ activeTaskId: null, activeTabId: null }, () => {
+        activeTaskId = null;
+        updateStreamsActivateButton(false);
+      });
+    } else {
+      const activeTask = tasks.find(t => t.id == newActiveId);
+      let streamsCount = 0;
+      if (activeTask) {
+        if (activeTask.type === 'series') {
+          const season = activeTask.activeSeason || 1;
+          const episode = activeTask.activeEpisode || 1;
+          const epKey = `${season}x${episode}`;
+          streamsCount = (activeTask.episodes && activeTask.episodes[epKey] && activeTask.episodes[epKey].rawStreams)
+            ? activeTask.episodes[epKey].rawStreams.length
+            : 0;
+        } else {
+          streamsCount = activeTask.rawStreams ? activeTask.rawStreams.length : 0;
+        }
+      }
+      chrome.action.setBadgeText({ text: streamsCount > 0 ? streamsCount.toString() : '0' });
+      chrome.action.setBadgeBackgroundColor({ color: '#DC2626' });
+
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const activeTabId = tabs[0] ? tabs[0].id : null;
+        chrome.storage.local.set({ activeTaskId: newActiveId, activeTabId: activeTabId }, () => {
+          activeTaskId = newActiveId;
+          updateStreamsActivateButton(true);
+        });
+      });
+    }
+  });
+}
+
+// Akıllı Çözünürlük ve Format Yakalama Helper'ı
+function getResolutionFromUrl(url) {
+  const lowerUrl = url.toLowerCase();
+  
+  // 1. Standart sayısal çözünürlük kontrolü
+  const match = lowerUrl.match(/(1080|720|480|360)p?/);
+  if (match) return match[1];
+  
+  // 2. Yaygın etiket eşleşmeleri
+  if (lowerUrl.includes('fhd') || lowerUrl.includes('1080p')) return '1080';
+  if (lowerUrl.includes('hd') || lowerUrl.includes('720p')) return '720';
+  if (lowerUrl.includes('sd') || lowerUrl.includes('480p')) return '480';
+  
+  // 3. Dosya formatı veya manifest türüne göre akıllı fallback ayırma
+  if (lowerUrl.includes('m3u8') || lowerUrl.includes('hls')) return 'HLS / M3U8';
+  if (lowerUrl.includes('mpd') || lowerUrl.includes('dash')) return 'DASH / MPD';
+  if (lowerUrl.includes('mp4')) return 'Progressive MP4';
+  
+  return 'Unknown';
+}
+
+// Akıllı ve Temiz İsimlendirme Helper'ı (Domain ve Kaynak Odaklı)
+function getMirrorLabel(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace('www.', '');
+    
+    // Bilinen patikalar için özel etiketler
+    if (url.includes('/mx/')) return `Premium Stream Engine (${host} · Line MX)`;
+    if (url.includes('/ma/')) return `Standard Stream Engine (${host} · Line MA)`;
+    if (url.includes('/m8/')) return `Alternative Stream Engine (${host} · Line M8)`;
+    
+    // Genel durum: Hangi cdn/domain üzerinden akış geliyorsa onun temiz adı ve dosya uzantısı
+    const extMatch = parsed.pathname.match(/\.(m3u8|mpd|mp4|mkv|webm)$/i);
+    const typeLabel = extMatch ? extMatch[1].toUpperCase() : 'Media';
+    
+    return `Stream Source (${host} · ${typeLabel} Live)`;
+  } catch (e) {
+    return "Stream Source (Alternative Line)";
+  }
+}
+
+function getSubtitleInfo(url) {
+    const lowerUrl = url.toLowerCase();
+    // Common language codes/names in file names
+    const langMap = {
+        'en': ['eng', 'english'], 'tr': ['tur', 'turkish'], 'de': ['ger', 'german'],
+        'es': ['spa', 'spanish'], 'fr': ['fre', 'french'], 'it': ['ita', 'italian'],
+        'ru': ['rus', 'russian'], 'ja': ['jpn', 'japanese'], 'ko': ['kor', 'korean'], 'zh': ['chi', 'chinese']
+    };
+
+    for (const [code, names] of Object.entries(langMap)) {
+        const allNames = [code, ...names];
+        const regex = new RegExp(`[\\/_\\.-](${allNames.join('|')})([\\/_\\.-]|\\.|$)`, 'i');
+        if (regex.test(lowerUrl)) {
+            return { url, lang: code, label: getMirrorLabel(url) };
+        }
+    }
+
+    return { url, lang: 'unknown', label: getMirrorLabel(url) };
+}
+
+// Yeni kategorileri de destekleyen dağıtım motoru
+function processRawStreams(rawUrls, task) {
+    const itemsByRes = {
+        '1080': [],
+        '720': [],
+        '480': [],
+        '360': [],
+        'HLS / M3U8': [],
+        'DASH / MPD': [],
+        'Progressive MP4': [],
+        'Unknown': []
+    };
+    const audioStreams = [];
+    const subtitleStreams = [];
+
+  rawUrls.forEach(url => {
+    let res = 'Unknown';
+    if (task && task.streamQualities && task.streamQualities[url]) {
+      const list = task.streamQualities[url] || [];
+      const resMatch = list.join(' ').match(/(\d+)p/);
+      if (resMatch) {
+        res = resMatch[1];
+      } else if (list.includes('HLS') || list.includes('HLS / M3U8')) {
+        res = 'HLS / M3U8';
+      } else if (list.includes('DASH') || list.includes('DASH / MPD')) {
+        res = 'DASH / MPD';
+      } else {
+        res = list[0] || 'Unknown';
+      }
+    } else {
+      res = getResolutionFromUrl(url);
+    }
+    const label = getMirrorLabel(url);
+    const isVr1 = url.toLowerCase().includes('vr1') || url.toLowerCase().includes('vru');
+
+    if (url.toLowerCase().endsWith('.vtt') || url.toLowerCase().endsWith('.srt') || getMirrorLabel(url).toLowerCase().includes('subtitle')) {
+        subtitleStreams.push(getSubtitleInfo(url));
+        return;
+    }
+
+    if (url.match(/\.(mp3|aac|ogg|wav|flac|m4a)$/i) || getMirrorLabel(url).toLowerCase().includes('audio')) {
+        audioStreams.push({
+            quality: 'Audio',
+            videoUrl: null,
+            audioUrl: url,
+            isVr1: false,
+            label: label
+        });
+        return;
+    }
+
+
+    const targetKey = itemsByRes[res] ? res : 'Unknown';
+    
+    itemsByRes[targetKey].push({
+      type: isVr1 ? 'unified-vr1' : 'unified',
+      quality: res,
+      videoUrl: url,
+      audioUrl: null,
+      isVr1: isVr1,
+      label: label
+    });
+  });
+
+    return {
+        video: itemsByRes,
+        audio: audioStreams,
+        subtitles: subtitleStreams
+    };
+}
+
+function renderGroupedStreams(task, patterns = {}) {
+  if (!streamsListContainer) return;
+  streamsListContainer.innerHTML = '';
+  
+  const rawUrls = task.rawStreams || [];
+  if (rawUrls.length === 0) {
+    streamsListContainer.innerHTML = `
+      <div class="flex flex-col items-center justify-center text-center p-6 bg-[#1E293B]/20 rounded-xl border border-slate-800 border-dashed py-12">
+        <svg class="w-8 h-8 text-slate-600 mb-2.5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.5 14h.5v.5a.5.5 0 00.5.5h.5v-.5a.5.5 0 00-.5-.5h-.5V13h.5a.5.5 0 00.5-.5v-.5a.5.5 0 00-.5-.5h-.5v.5a.5.5 0 00.5.5h.5zM2 13h10v2H2z"/>
+        </svg>
+        <span class="text-xs font-semibold text-slate-400">Awaiting media streams...</span>
+        <span class="text-[10px] text-slate-500 mt-1 max-w-[220px] leading-relaxed">Make sure "Active Sniffing" is enabled above, then visit the streaming site and play a video.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const { video: itemsByRes, audio: audioItems } = processRawStreams(rawUrls, task);
+  const favoritesList = task.favorites || [];
+  const favoriteItems = [];
+  const recommendedItems = [];
+  const videoPatterns = patterns.video_patterns || [];
+  const audioPatterns = patterns.audio_patterns || [];
+
+  // Filter and extract favorites and recommendations from video streams
+  for (const res in itemsByRes) {
+    itemsByRes[res] = itemsByRes[res].filter(item => {
+      const targetUrl = item.videoUrl || item.audioUrl;
+      const isTagged = (task.taggedVideoUrl === targetUrl) || (task.taggedAudioUrl === targetUrl);
+      
+      const isRecommended = isTagged;
+
+      if (favoritesList.includes(targetUrl)) {
+        favoriteItems.push(item);
+        return false; // remove from original category
+      }
+      if (isRecommended) {
+        recommendedItems.push(item);
+        return false; // remove from original category
+      }
+      return true;
+    });
+  }
+
+  const categories = [
+    { id: 'res-favorites', title: '★ Favorite Streams', items: favoriteItems, color: 'text-amber-400', badgeBg: 'bg-amber-950/80 border-amber-800/40 text-amber-400 font-bold' },
+    { id: 'res-recommended', title: '💡 Recommended Streams', items: recommendedItems, color: 'text-emerald-400', badgeBg: 'bg-emerald-950/80 border-emerald-800/40 text-emerald-400 font-bold' },
+    { id: 'res-1080', title: '1080p Full HD', items: itemsByRes['1080'] || [], color: 'text-purple-400', badgeBg: 'bg-purple-950/80 border-purple-800/40 text-purple-400' },
+    { id: 'res-720', title: '720p HD', items: itemsByRes['720'] || [], color: 'text-cyan-400', badgeBg: 'bg-cyan-950/80 border-cyan-800/40 text-cyan-400' },
+    { id: 'res-480', title: '480p SD', items: itemsByRes['480'] || [], color: 'text-amber-400', badgeBg: 'bg-amber-950/80 border-amber-800/40 text-amber-400' },
+    { id: 'res-360', title: '360p SD', items: itemsByRes['360'] || [], color: 'text-emerald-400', badgeBg: 'bg-emerald-950/80 border-emerald-800/40 text-emerald-400' },
+    { id: 'res-hls', title: 'HLS Streams (.m3u8)', items: itemsByRes['HLS / M3U8'] || [], color: 'text-indigo-400', badgeBg: 'bg-indigo-950/80 border-indigo-800/40 text-indigo-400' },
+    { id: 'res-dash', title: 'DASH Streams (.mpd)', items: itemsByRes['DASH / MPD'] || [], color: 'text-blue-400', badgeBg: 'bg-blue-950/80 border-blue-800/40 text-blue-400' },
+    { id: 'res-mp4', title: 'Progressive Videos (.mp4)', items: itemsByRes['Progressive MP4'] || [], color: 'text-teal-400', badgeBg: 'bg-teal-950/80 border-teal-800/40 text-teal-400' },
+    { id: 'res-unknown', title: 'Other/Unknown Streams', items: itemsByRes['Unknown'] || [], color: 'text-slate-400', badgeBg: 'bg-slate-900 border-slate-800 text-slate-400' }
+  ];
+
+  let hasExpanded = false;
+  categories.forEach((cat) => {
+    if (cat.items.length === 0) return;
+
+    const accordion = document.createElement('div');
+    accordion.className = 'border border-slate-800 rounded-xl overflow-hidden bg-[#1E293B]/20 transition-all duration-200';
+    const defaultOpen = !hasExpanded;
+    if (defaultOpen) hasExpanded = true;
+
+    accordion.innerHTML = `
+      <button class="accordion-header w-full flex items-center justify-between p-3.5 bg-[#1E293B]/70 hover:bg-[#1E293B] text-slate-200 font-bold text-xs tracking-wider uppercase transition-colors focus:outline-none">
+        <div class="flex items-center gap-2">
+          <span class="${cat.color}">${cat.title}</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded ${cat.badgeBg} font-medium normal-case">${cat.items.length} ${cat.items.length === 1 ? 'source' : 'sources'}</span>
+        </div>
+        <svg class="accordion-icon w-4 h-4 text-slate-400 transform transition-transform duration-300 ${defaultOpen ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div class="accordion-content accordion-content-body overflow-hidden transition-all duration-300 max-h-0 opacity-0 ${defaultOpen ? 'view-visible' : 'view-hidden'}" style="${defaultOpen ? 'max-height: 3000px; opacity: 1;' : ''}">
+        <div class="p-3.5 space-y-2 bg-[#0F172A]/40 border-t border-slate-900/80"></div>
+      </div>
+    `;
+
+    const contentWrapper = accordion.querySelector('.accordion-content-body > div');
+
+    cat.items.forEach((item, index) => {
+      const mirrorCard = document.createElement('div');
+      mirrorCard.className = 'group relative flex flex-col justify-between bg-[#1E293B] border border-slate-800/80 hover:border-cyan-500/50 p-3 rounded-lg cursor-pointer hover:shadow-lg transition-all duration-200';
+      const targetUrl = item.videoUrl || item.audioUrl;
+      const isFavorite = favoritesList.includes(targetUrl);
+
+      const isVideoTagged = (task.taggedVideoUrl === targetUrl);
+      const isAudioTagged = (task.taggedAudioUrl === targetUrl);
+
+      const starSvg = isFavorite 
+        ? `<svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>`
+        : `<svg class="w-3.5 h-3.5 text-slate-500 hover:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.969 0 1.371 1.24.588 1.81l-3.97 2.883a1 1 0 00-.364 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.971-2.883a1 1 0 00-1.18 0l-3.97 2.883c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.364-1.118L2.98 9.42c-.783-.57-.38-1.81.588-1.81h4.906a1 1 0 00.951-.69l1.519-4.674z"/></svg>`;
+
+      mirrorCard.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Mirror Source #${index + 1}</span>
+          <div class="flex items-center gap-1">
+            <button class="btn-tag-video p-1 rounded-lg transition-colors focus:outline-none ${isVideoTagged ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:bg-slate-800 hover:text-cyan-400'}" title="${isVideoTagged ? 'Remove Video Tag' : 'Set as Video Source'}">
+              <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            </button>
+            <button class="btn-tag-audio p-1 rounded-lg transition-colors focus:outline-none ${isAudioTagged ? 'bg-purple-500/20 text-purple-400' : 'text-slate-500 hover:bg-slate-800 hover:text-purple-400'}" title="${isAudioTagged ? 'Remove Audio Tag' : 'Set as Audio Source'}">
+              <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+            </button>
+            <div class="w-px h-3 bg-slate-700 mx-0.5"></div>
+            <button class="btn-favorite-stream p-1 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none" title="${isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}">
+              ${starSvg}
+            </button>
+            <button class="btn-delete-stream p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-rose-400 transition-colors focus:outline-none" title="Delete Captured Record">
+              <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+            <svg class="w-3 h-3 text-slate-500 group-hover:text-cyan-400 transform group-hover:translate-x-0.5 transition-all ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+            </svg>
+          </div>
+        </div>
+        <div class="text-[11px] font-bold text-slate-200 mb-1 leading-normal truncate group-hover:text-cyan-300">${item.label}</div>
+        <div class="text-[10px] font-mono text-slate-500 group-hover:text-slate-400 break-all select-none line-clamp-1 leading-normal">${targetUrl}</div>
+      `;
+
+      const btnFav = mirrorCard.querySelector('.btn-favorite-stream');
+      btnFav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFavorite(task.id, targetUrl);
+      });
+
+      const btnVideo = mirrorCard.querySelector('.btn-tag-video');
+      btnVideo.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleTaggedVideo(task.id, targetUrl);
+      });
+
+      const btnAudio = mirrorCard.querySelector('.btn-tag-audio');
+      btnAudio.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleTaggedAudio(task.id, targetUrl);
+      });
+
+      const btnDel = mirrorCard.querySelector('.btn-delete-stream');
+      btnDel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteStreamRecord(task.id, targetUrl);
+      });
+
+      mirrorCard.addEventListener('click', () => { openPlayerDeployPage(task, item, rawUrls); });
+      contentWrapper.appendChild(mirrorCard);
+    });
+
+    const headerBtn = accordion.querySelector('.accordion-header');
+    const content = accordion.querySelector('.accordion-content');
+    const icon = accordion.querySelector('.accordion-icon');
+
+    headerBtn.addEventListener('click', () => {
+      const isOpen = content.classList.contains('view-visible');
+      if (isOpen) {
+        content.classList.replace('view-visible', 'view-hidden');
+        content.style.maxHeight = '0px'; content.style.opacity = '0';
+        icon.classList.remove('rotate-180');
+      } else {
+        content.classList.replace('view-hidden', 'view-visible');
+        content.style.maxHeight = '3000px'; content.style.opacity = '1';
+        icon.classList.add('rotate-180');
+      }
+    });
+
+    streamsListContainer.appendChild(accordion);
+  });
+  updateDeployTaggedFooter(task, rawUrls);
+}
+
+function updateDeployTaggedFooter(task, rawUrls) {
+  if (!streamsFooter || !btnDeployTagged) return;
+  if (task.taggedVideoUrl || task.taggedAudioUrl) {
+    streamsFooter.classList.remove('hidden');
+    // Store current task and urls globally so onDeployTaggedClick can access them
+    currentTaskContext = task;
+    availableStreams = rawUrls; // reuse variable
+  } else {
+    streamsFooter.classList.add('hidden');
+  }
+}
+
+function onDeployTaggedClick() {
+  if (!currentTaskContext) return;
+  const videoUrl = currentTaskContext.taggedVideoUrl;
+  const audioUrl = currentTaskContext.taggedAudioUrl;
+  if (!videoUrl && !audioUrl) return;
+
+  const videoItem = findStreamItem(currentTaskContext, videoUrl);
+  const audioItem = findStreamItem(currentTaskContext, audioUrl);
+
+  // If only audio is tagged, we fallback to the audioUrl as the videoUrl (dummy), but ideally video is tagged.
+  const fallbackUrl = audioUrl || '';
+  const dummyVideo = videoItem || { 
+    videoUrl: fallbackUrl, 
+    label: 'No Video Selected',
+    quality: 'Unknown'
+  };
+
+  openPlayerDeployPage(currentTaskContext, dummyVideo, availableStreams, audioItem);
+}
+
+function navigateBackToStreams() { switchView('taskStreams'); }
+
+function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null) {
+  if (customVideoInput) customVideoInput.value = '';
+  if (customAudioInput) customAudioInput.value = '';
+
+  const { audio, subtitles, video } = processRawStreams(rawUrls, task);
+  availableAudios = audio;
+  availableSubtitles = subtitles;
+  availableVideos = video;
+  currentTaskContext = task;
+
+  // Set the selected stream URL and don't change it.
+  currentStreamItem = selectedItem;
+  selectedStreamUrl = selectedItem.videoUrl;
+
+  playerPageTitle.textContent = task.title;
+  // Update UI with the clicked stream's info
+  playerPageMeta.textContent = selectedItem.label;
+  displayStreamUrl.textContent = selectedStreamUrl;
+
+  playerMetaTmdb.textContent = task.id;
+  playerMetaType.textContent = task.type;
+
+  if (deploySeasonInput) {
+    deploySeasonInput.disabled = false;
+    deploySeasonInput.classList.remove('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
+  }
+  if (deployEpisodeInput) {
+    deployEpisodeInput.disabled = false;
+    deployEpisodeInput.classList.remove('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
+  }
+
+  if (task.type === 'series') {
+    deployEpisodicInputsWrapper.classList.remove('hidden');
+    deploySeasonInput.value = task.season || '';
+    deployEpisodeInput.value = task.episode || '';
+    deploySeasonInput.disabled = true;
+    deployEpisodeInput.disabled = true;
+    deploySeasonInput.classList.add('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
+    deployEpisodeInput.classList.add('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
+  } else {
+    deployEpisodicInputsWrapper.classList.add('hidden');
+  }
+
+  populateQualitySelector(selectedStreamUrl, task);
+  
+  if (qualitySelector.options.length > 0) {
+    const initialQuality = selectedItem.quality;
+    let matchingIndex = -1;
+    for (let i = 0; i < qualitySelector.options.length; i++) {
+      if (qualitySelector.options[i].value.toLowerCase().includes(initialQuality.toLowerCase())) {
+        matchingIndex = i;
+        break;
+      }
+    }
+    if (matchingIndex !== -1) {
+      qualitySelector.selectedIndex = matchingIndex;
+    } else {
+      qualitySelector.selectedIndex = 0;
+    }
+    selectedQuality = qualitySelector.value;
+  } else {
+    selectedQuality = 'Unknown';
+  }
+
+  populateAudioSelector();
+  
+  if (audioItem) {
+    audioSelector.value = audioItem.videoUrl || audioItem.audioUrl;
+    selectedAudioUrl = audioSelector.value;
+  } else if (selectedAudioUrl) {
+    audioSelector.value = selectedAudioUrl;
+  }
+
+  // Persist selections to storage in case popup closes
+  chrome.storage.local.set({
+    currentStreamItem: currentStreamItem,
+    selectedStreamUrl: selectedStreamUrl,
+    selectedAudioUrl: selectedAudioUrl
+  });
+
+  populateLanguageSelector();
+  populateSubtitles();
+
+  resetDeployButtonState();
+  switchView('playerDeploy');
+}
+
+function populateQualitySelector(url, task) {
+    qualitySelector.innerHTML = '';
+    let qualities = ['1080p', '720p', '480p', '360p', 'Unknown'];
+    
+    if (task && task.streamQualities && task.streamQualities[url]) {
+      const list = task.streamQualities[url];
+      if (list && list.length > 0) {
+        qualities = list;
+      }
+    }
+
+    qualities.forEach(q => {
+        const option = document.createElement('option');
+        option.value = q;
+        option.textContent = q;
+        qualitySelector.appendChild(option);
+    });
+}
+
+function onQualityChange(quality) {
+    selectedQuality = quality;
+    // This function no longer needs to update the URL, just the state.
+}
+
+function populateAudioSelector() {
+    audioSelector.innerHTML = '';
+    const noAudioOption = document.createElement('option');
+    noAudioOption.value = '';
+    noAudioOption.textContent = 'No additional audio';
+    audioSelector.appendChild(noAudioOption);
+
+    let hasOptions = (availableAudios.length > 0);
+
+    if (availableAudios.length > 0) {
+        availableAudios.forEach((audio, index) => {
+            const option = document.createElement('option');
+            option.value = audio.audioUrl;
+            option.textContent = audio.label || `Audio Track #${index + 1}`;
+            audioSelector.appendChild(option);
+        });
+    }
+
+    if (availableVideos) {
+        Object.entries(availableVideos).forEach(([res, items]) => {
+            if (items && items.length > 0) {
+                items.forEach((videoItem) => {
+                    const option = document.createElement('option');
+                    option.value = videoItem.videoUrl;
+                    option.textContent = `[Video as Audio] ${videoItem.label || 'Video Source'} (${res})`;
+                    audioSelector.appendChild(option);
+                    hasOptions = true;
+                });
+            }
+        });
+    }
+
+    if (hasOptions) {
+        audioSelectorWrapper.classList.remove('hidden');
+        selectedAudioUrl = audioSelector.value;
+    } else {
+        audioSelectorWrapper.classList.add('hidden');
+        selectedAudioUrl = null;
+    }
+}
+
+function populateLanguageSelector() {
+    if (!languageSelector) return;
+    languageSelector.innerHTML = '';
+    const languages = {
+        'en': 'English', 'tr': 'Turkish', 'de': 'German', 'es': 'Spanish',
+        'fr': 'French', 'it': 'Italian', 'ru': 'Russian', 'ja': 'Japanese',
+        'ko': 'Korean', 'zh': 'Chinese', 'other': 'Other'
+    };
+    Object.entries(languages).forEach(([code, name]) => {
+        const option = document.createElement('option');
+        option.value = code;
+        option.textContent = name;
+        languageSelector.appendChild(option);
+    });
+    languageSelector.value = 'en';
+}
+
+function populateSubtitles() {
+    if (!subtitlesList || !subtitlesWrapper) return;
+    subtitlesList.innerHTML = '';
+    if (availableSubtitles.length > 0) {
+        subtitlesWrapper.classList.remove('hidden');
+        availableSubtitles.forEach((sub, index) => {
+            const lang = sub.lang || 'unknown';
+            const id = `sub-checkbox-${index}`;
+            const checkboxWrapper = document.createElement('div');
+            checkboxWrapper.className = 'flex items-center gap-2 bg-slate-900/50 p-2 rounded-md text-xs';
+            checkboxWrapper.innerHTML = `
+                <input id="${id}" type="checkbox" value="${sub.url}" data-lang="${lang}" class="h-4 w-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-600 focus:ring-offset-slate-800">
+                <label for="${id}" class="text-slate-300 flex-1 truncate cursor-pointer" title="${sub.url}">${sub.label} (${lang.toUpperCase()})</label>
+            `;
+            subtitlesList.appendChild(checkboxWrapper);
+        });
+    } else {
+        subtitlesWrapper.classList.add('hidden');
+    }
+}
+
+function resetDeployButtonState() {
+  if (!btnDeployServer) return;
+  btnDeployServer.disabled = false;
+  btnDeployServer.className = 'flex-1 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-semibold py-2.5 px-4 rounded-lg shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs';
+  iconDeployState.innerHTML = `
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+  `;
+  textDeployState.textContent = 'Deploy Folder';
+}
+
+function onPreviewClick() {
+  const targetUrl = selectedStreamUrl || selectedAudioUrl;
+  if (!targetUrl) { displayError('No active stream URL selected.'); return; }
+  
+  const headers = (currentTaskContext.capturedHeaders && targetUrl) ? currentTaskContext.capturedHeaders[targetUrl] : {};
+  
+  const params = new URLSearchParams();
+  params.set('url', targetUrl);
+  params.set('title', currentTaskContext.title || '');
+  if (headers.referer) params.set('referer', headers.referer);
+  if (headers.origin) params.set('origin', headers.origin);
+  if (headers['user-agent']) params.set('useragent', headers['user-agent']);
+  
+  const selectedAudio = audioSelector ? audioSelector.value : '';
+  if (selectedAudio) {
+    params.set('audioUrl', selectedAudio);
+    const audioHeaders = (currentTaskContext.capturedHeaders && selectedAudio) ? currentTaskContext.capturedHeaders[selectedAudio] : {};
+    if (audioHeaders.referer) params.set('audioReferer', audioHeaders.referer);
+    if (audioHeaders.origin) params.set('audioOrigin', audioHeaders.origin);
+  }
+  
+  chrome.tabs.create({ url: `player.html?${params.toString()}` });
+}
+
+function triggerStreamDownloads() {
+  const targetUrl = selectedStreamUrl || selectedAudioUrl;
+  if (!targetUrl) { displayError('No active stream URL selected.'); return; }
+  chrome.downloads.download({ url: targetUrl }, (downloadId) => {
+    const error = chrome.runtime.lastError;
+    if (error) displayError(`Download failed: ${error.message}`);
+  });
+}
+
+function deployMetadataPayload() {
+  const customVideo = customVideoInput ? customVideoInput.value.trim() : '';
+  const customAudio = customAudioInput ? customAudioInput.value.trim() : '';
+
+  const finalStreamUrl = customVideo || selectedStreamUrl;
+  selectedAudioUrl = customAudio || audioSelector.value;
+
+  if (!finalStreamUrl) { displayError('No video stream has been selected or provided.'); return; }
+  btnDeployServer.disabled = true;
+  btnDeployServer.className = 'flex-1 bg-slate-800 border border-slate-700 text-slate-400 font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed text-xs';
+  textDeployState.textContent = 'Connecting...';
+  iconDeployState.innerHTML = `
+    <svg class="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+  `;
+
+  // Only use sniffed headers if we are deploying the sniffed URL itself
+  const headers = (!customVideo && currentTaskContext.capturedHeaders && selectedStreamUrl)
+    ? currentTaskContext.capturedHeaders[selectedStreamUrl]
+    : {};
+  
+  const selectedLanguage = languageSelector.value;
+  const selectedSubtitles = [];
+  if (subtitlesList) {
+    const subtitleCheckboxes = subtitlesList.querySelectorAll('input[type="checkbox"]:checked');
+    subtitleCheckboxes.forEach(checkbox => {
+        selectedSubtitles.push({
+            language: checkbox.dataset.lang || 'unknown',
+            url: checkbox.value
+        });
+    });
+  }
+
+  // RULE-COMPLIANT PAYLOAD GENERATION
+  const payload = {
+    video_url: finalStreamUrl,
+    audio_url: selectedAudioUrl || null,
+    media_type: currentTaskContext.type === 'series' ? 'tv' : 'movie',
+    tmdb_id: currentTaskContext.id,
+    headers: headers || {},
+    quality: selectedQuality || 'Unknown',
+    language: selectedLanguage || 'en',
+    subtitles: selectedSubtitles
+  };
+  
+  if (currentTaskContext.type === 'series') {
+    const season = parseInt(deploySeasonInput.value, 10);
+    const episode = parseInt(deployEpisodeInput.value, 10);
+    if (isNaN(season) || season < 0 || isNaN(episode) || episode < 0) {
+        displayError('Please enter valid season and episode numbers.');
+        resetDeployButtonState();
+        return;
+    }
+    payload.season = season;
+    payload.episode = episode;
+  }
+  
+  const requestUrl = `${savedServerUrl}/api/add-movie`;
+
+  fetch(requestUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${savedApiKey}`
+    }, // [16]
+    body: JSON.stringify(payload)
+  })
+  .then(async (response) => {
+    if (response.status === 401 || response.status === 403) {
+      displayError('Unauthorized connection credentials.');
+      resetDeployButtonState();
+      return;
+    }
+    if (!response.ok) throw new Error(`Deployment responded with HTTP ${response.status}`);
+
+    btnDeployServer.className = 'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all text-xs';
+    textDeployState.textContent = 'Injected';
+    iconDeployState.innerHTML = `
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+    `;
+
+    setTimeout(() => { switchView('taskStreams'); }, 1200);
+  })
+  .catch((err) => {
+    resetDeployButtonState();
+    btnDeployServer.classList.add('animate-shake');
+    setTimeout(() => { btnDeployServer.classList.remove('animate-shake'); }, 4500);
+    displayError(err.message || 'Server Connection Timed Out.');
+  });
+}
+
+let currentTvTask = null;
+let currentSelectedSeason = null;
+
+function openTvDetailsPage(task) {
+  currentTvTask = task;
+  currentSelectedSeason = null;
+  switchView('tvDetails');
+  
+  if (tvShowTitle) tvShowTitle.textContent = task.title;
+  if (tvShowMeta) tvShowMeta.textContent = 'Select Season';
+  
+  if (tvSeasonsContainer) tvSeasonsContainer.classList.remove('hidden');
+  if (tvEpisodesContainer) tvEpisodesContainer.classList.add('hidden');
+  
+  renderSeasonsList(task);
+}
+
+async function renderSeasonsList(task) {
+  if (!tvSeasonsContainer) return;
+  tvSeasonsContainer.innerHTML = '<div class="text-xs text-slate-400 p-4 text-center">Loading seasons...</div>';
+  
+  let seasons = [];
+  if (savedTmdbApiKey && task.id) {
+    const url = `https://api.themoviedb.org/3/tv/${task.id}?api_key=${savedTmdbApiKey}&language=en-US`;
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        seasons = data.seasons || [];
+      }
+    } catch (e) {
+      console.error("Failed to fetch TV details from TMDB:", e);
+    }
+  }
+  
+  if (seasons.length === 0) {
+    for (let i = 1; i <= 8; i++) {
+      seasons.push({
+        season_number: i,
+        name: `Season ${i}`,
+        episode_count: 24
+      });
+    }
+  }
+  
+  tvSeasonsContainer.innerHTML = '';
+  seasons.forEach(season => {
+    if (season.season_number === 0 && seasons.length > 1) return;
+    
+    const card = document.createElement('div');
+    card.className = 'flex items-center justify-between p-3.5 bg-[#1E293B]/70 hover:bg-[#1E293B] border border-slate-800 hover:border-cyan-500/50 rounded-xl cursor-pointer transition-all duration-200';
+    card.innerHTML = `
+      <div class="flex flex-col">
+        <span class="font-bold text-xs text-slate-200">${season.name || `Season ${season.season_number}`}</span>
+        <span class="text-[9px] text-slate-500 font-bold uppercase mt-0.5">${season.episode_count} Episodes</span>
+      </div>
+      <svg class="w-4 h-4 text-slate-450" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    `;
+    card.addEventListener('click', () => {
+      selectSeason(season);
+    });
+    tvSeasonsContainer.appendChild(card);
+  });
+}
+
+async function selectSeason(season) {
+  currentSelectedSeason = season.season_number;
+  if (tvShowMeta) tvShowMeta.textContent = season.name || `Season ${season.season_number}`;
+  
+  if (!tvEpisodesContainer) return;
+  tvEpisodesContainer.innerHTML = '<div class="text-xs text-slate-400 p-4 text-center">Loading episodes...</div>';
+  
+  if (tvSeasonsContainer) tvSeasonsContainer.classList.add('hidden');
+  tvEpisodesContainer.classList.remove('hidden');
+  
+  let episodes = [];
+  if (savedTmdbApiKey && currentTvTask.id) {
+    const url = `https://api.themoviedb.org/3/tv/${currentTvTask.id}/season/${season.season_number}?api_key=${savedTmdbApiKey}&language=en-US`;
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        episodes = data.episodes || [];
+      }
+    } catch (e) {
+      console.error("Failed to fetch Season details from TMDB:", e);
+    }
+  }
+  
+  if (episodes.length === 0) {
+    const count = season.episode_count || 24;
+    for (let i = 1; i <= count; i++) {
+      episodes.push({
+        episode_number: i,
+        name: `Episode ${i}`,
+        overview: ''
+      });
+    }
+  }
+  
+  tvEpisodesContainer.innerHTML = '';
+  episodes.forEach(episode => {
+    const card = document.createElement('div');
+    card.className = 'flex flex-col p-3 bg-[#1E293B]/70 hover:bg-[#1E293B] border border-slate-800 hover:border-cyan-500/50 rounded-xl cursor-pointer transition-all duration-200';
+    
+    const epKey = `${season.season_number}x${episode.episode_number}`;
+    const streamCount = (currentTvTask.episodes && currentTvTask.episodes[epKey] && currentTvTask.episodes[epKey].rawStreams) 
+      ? currentTvTask.episodes[epKey].rawStreams.length 
+      : 0;
+      
+    const badge = streamCount > 0 
+      ? `<span class="px-1.5 py-0.5 text-[8px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded">${streamCount} streams</span>`
+      : `<span class="px-1.5 py-0.5 text-[8px] font-bold bg-slate-800 text-slate-500 rounded">no streams</span>`;
+      
+    card.innerHTML = `
+      <div class="flex items-center justify-between">
+        <span class="font-bold text-xs text-slate-200">Episode ${episode.episode_number}: ${episode.name}</span>
+        ${badge}
+      </div>
+      ${episode.overview ? `<p class="text-[9px] text-slate-550 mt-1 line-clamp-2 leading-relaxed">${episode.overview}</p>` : ''}
+    `;
+    card.addEventListener('click', () => {
+      selectEpisode(season.season_number, episode.episode_number);
+    });
+    tvEpisodesContainer.appendChild(card);
+  });
+}
+
+function selectEpisode(seasonNumber, episodeNumber) {
+  chrome.storage.local.get(['scanned_tasks'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    const taskIndex = tasks.findIndex(t => t.id == currentTvTask.id);
+    if (taskIndex === -1) return;
+    
+    const task = tasks[taskIndex];
+    task.activeSeason = seasonNumber;
+    task.activeEpisode = episodeNumber;
+    
+    chrome.storage.local.set({ scanned_tasks: tasks }, () => {
+      currentTaskId = task.id;
+      switchView('taskStreams');
+    });
+  });
+}
+
+function onTvBackClick() {
+  if (currentSelectedSeason !== null) {
+    currentSelectedSeason = null;
+    if (tvShowMeta) tvShowMeta.textContent = 'Select Season';
+    if (tvSeasonsContainer) tvSeasonsContainer.classList.remove('hidden');
+    if (tvEpisodesContainer) tvEpisodesContainer.classList.add('hidden');
+  } else {
+    switchView('dashboard');
+  }
+}
+
+function navigateBackFromStreams() {
+  chrome.storage.local.get(['scanned_tasks'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    const task = tasks.find(t => t.id == currentTaskId);
+    if (task && task.type === 'series') {
+      openTvDetailsPage(task);
+    } else {
+      switchView('dashboard');
+    }
+  });
+}
+
+function deleteStreamRecord(taskId, url) {
+  chrome.storage.local.get(['scanned_tasks'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    const taskIndex = tasks.findIndex(t => t.id == taskId);
+    if (taskIndex === -1) return;
+
+    const task = tasks[taskIndex];
+    
+    const removeFromArray = (arr, val) => {
+      if (!arr) return;
+      const index = arr.indexOf(val);
+      if (index !== -1) arr.splice(index, 1);
+    };
+
+    if (task.type === 'series') {
+      const season = task.activeSeason || 1;
+      const episode = task.activeEpisode || 1;
+      const epKey = `${season}x${episode}`;
+      if (task.episodes && task.episodes[epKey]) {
+        const epData = task.episodes[epKey];
+        removeFromArray(epData.rawStreams, url);
+        removeFromArray(epData.favorites, url);
+        if (epData.taggedVideoUrl === url) epData.taggedVideoUrl = null;
+        if (epData.taggedAudioUrl === url) epData.taggedAudioUrl = null;
+      }
+    } else {
+      removeFromArray(task.favorites, url);
+      if (task.taggedVideoUrl === url) task.taggedVideoUrl = null;
+      if (task.taggedAudioUrl === url) task.taggedAudioUrl = null;
+    }
+
+    if (task.capturedHeaders) delete task.capturedHeaders[url];
+    if (task.streamQualities) delete task.streamQualities[url];
+    
+    // Always remove from the primary/unscoped rawStreams
+    removeFromArray(task.rawStreams, url);
+
+    chrome.storage.local.set({ scanned_tasks: tasks });
+  });
+}

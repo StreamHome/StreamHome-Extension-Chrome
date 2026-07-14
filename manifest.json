@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "Antigravity Stream Sniffer",
+  "version": "1.0.0",
+  "description": "Secure, authenticated network sniffer for media streams.",
+  "permissions": [
+    "webRequest",
+    "activeTab",
+    "storage",
+    "tabs",
+    "scripting",
+    "downloads",
+    "cookies",
+    "unlimitedStorage",
+    "declarativeNetRequest",
+    "notifications"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "icons": {
+    "128": "icon.jpg"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Antigravity Stream",
+    "default_icon": "icon.jpg"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "styles.css",
+        "player.html",
+        "player.js",
+        "hls.min.js",
+        "dash.all.min.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

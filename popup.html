@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Antigravity Task Sniffer</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body {
+      width: 360px;
+      height: 600px;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    /* View Transitions */
+    .view-transition {
+      transition: opacity 0.25s ease-in-out, transform 0.25s ease-in-out;
+      width: 100%;
+      height: 100%;
+      max-height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .view-hidden {
+      display: none !important;
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    .view-visible {
+      display: flex !important;
+      opacity: 1;
+      transform: scale(1);
+    }
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.3);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.4);
+    }
+    /* Accordion transition styles */
+    .accordion-content {
+      transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-[#0F172A] text-slate-100 font-sans antialiased flex flex-col relative select-none">
+
+  <!-- Global Error Toast -->
+  <div id="error-toast" class="absolute top-0 inset-x-0 bg-rose-600 border-b border-rose-500 text-white text-xs font-medium py-3 px-4 flex items-center justify-between shadow-lg transform -translate-y-full transition-transform duration-300 z-50">
+    <div class="flex items-center gap-2">
+      <svg class="w-4 h-4 text-rose-100 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <span id="error-message" class="truncate max-w-[280px]">Error occurred.</span>
+    </div>
+    <button id="close-toast" class="text-rose-200 hover:text-white transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- ==================== VIEW 1: AUTHENTICATION GATE ==================== -->
+  <div id="page-auth" class="view-transition view-visible w-full h-full flex flex-col justify-between p-6">
+    <div class="flex flex-col items-center text-center mt-6">
+      <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-4 animate-pulse">
+        <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 00-2 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+      </div>
+      <h2 class="text-lg font-extrabold text-white tracking-tight">System Authenticator</h2>
+      <p class="text-[10px] text-slate-400 mt-1 max-w-[240px]">Link the traffic sniffer to your central media deployment server.</p>
+    </div>
+
+    <div class="space-y-3.5 my-auto">
+      <div class="space-y-1">
+        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Server URL</label>
+        <input type="url" id="input-server-url" placeholder="http://localhost:8000" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Access Token / API Key</label>
+        <input type="password" id="input-api-key" placeholder="Enter authentication token" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+      </div>
+      <div class="space-y-1">
+        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">TMDB API Key (v3)</label>
+        <input type="password" id="input-tmdb-api-key" placeholder="Enter TMDB API Key" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+      </div>
+    </div>
+
+    <button id="btn-verify-connect" class="w-full bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-bold py-2.5 rounded-lg shadow-lg hover:shadow-cyan-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs">
+      <span>Verify & Connect</span>
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- ==================== PAGE 1: THE MAIN DASHBOARD VIEW ==================== -->
+  <div id="page-dashboard" class="view-transition view-hidden w-full h-full flex flex-col">
+    <!-- Header -->
+    <header class="flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center font-extrabold text-xs text-white">A</div>
+        <span class="font-extrabold text-xs tracking-wider uppercase text-slate-200">Tasks</span>
+      </div>
+      <button id="btn-dashboard-settings" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none" title="Disconnect API Session">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Task List Scroller -->
+    <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+      <div id="tasks-container" class="space-y-3"></div>
+
+      <!-- Dashboard Empty State -->
+      <div id="dashboard-empty-state" class="hidden flex-col items-center justify-center text-center py-16 px-4">
+        <div class="w-12 h-12 rounded-full bg-slate-800/50 flex items-center justify-center text-slate-500 mb-3 border border-slate-700/30">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+          </svg>
+        </div>
+        <span class="text-xs font-bold text-slate-400">No active tracking sessions</span>
+        <span class="text-[10px] text-slate-500 mt-1 max-w-[200px]">Create a folder structure using the "+" button below to scan network traffic.</span>
+      </div>
+    </div>
+
+    <!-- Floating Create Button -->
+    <div class="p-4 border-t border-slate-850 bg-[#0F172A]/80 backdrop-blur flex justify-end flex-shrink-0">
+      <button id="btn-create-task" class="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 text-white flex items-center justify-center shadow-lg hover:shadow-cyan-500/20 hover:scale-105 active:scale-[0.95] transition-all focus:outline-none">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== SUB-VIEW: CREATE TASK DIALOG ==================== -->
+  <div id="page-create-task" class="view-transition view-hidden w-full h-full flex flex-col justify-between p-6">
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col">
+        <h2 class="text-sm font-extrabold text-white">Create Target Folder</h2>
+        <p class="text-[10px] text-slate-500 mt-0.5">Search title parameters from TMDB API.</p>
+      </div>
+
+      <!-- Live Autocomplete Field -->
+      <div class="space-y-1 relative">
+        <label class="text-[9px] font-bold text-slate-450 uppercase tracking-wider">Search Title (Movie/Series)</label>
+        <div class="relative">
+          <input type="text" id="input-task-search" placeholder="Type name (English search)..." autocomplete="off" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2.5 pl-3 pr-8 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors" />
+          <svg class="w-4 h-4 text-slate-500 absolute right-2.5 top-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+        </div>
+        <div id="tmdb-suggestions" class="absolute z-50 left-0 right-0 top-full mt-1 bg-[#1E293B] border border-slate-800 rounded-lg shadow-xl max-h-40 overflow-y-auto custom-scrollbar hidden"></div>
+      </div>
+
+      <!-- Detected Content Type Display -->
+      <div id="task-type-indicator-wrapper" class="hidden flex items-center justify-between bg-[#1E293B]/40 border border-slate-800 p-2.5 rounded-lg">
+        <span class="text-[9px] font-bold text-slate-450 uppercase tracking-wider">Media Format</span>
+        <span id="task-type-indicator" class="text-[10px] font-extrabold text-cyan-400 uppercase tracking-wider bg-cyan-950/80 border border-cyan-800/40 px-2 py-0.5 rounded">Movie</span>
+      </div>
+
+      <!-- Episodic metadata wrapper -->
+      <div id="task-episodic-inputs-wrapper" class="flex flex-col gap-3 overflow-hidden transition-all duration-350 opacity-0 pointer-events-none max-h-0">
+        <div class="grid grid-cols-2 gap-3.5">
+          <div class="space-y-1">
+            <label class="text-[9px] font-bold text-slate-450 uppercase tracking-wider">Season Index</label>
+            <input type="number" id="input-task-season" placeholder="e.g. 1" min="1" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[9px] font-bold text-slate-450 uppercase tracking-wider">Episode Index</label>
+            <input type="number" id="input-task-episode" placeholder="e.g. 3" min="1" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Dialog Footer -->
+    <div class="flex gap-3 mt-6">
+      <button id="btn-cancel-task" class="flex-1 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 font-bold py-2 rounded-lg text-xs active:scale-[0.98] transition-all">Cancel</button>
+      <button id="btn-save-task" class="flex-1 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-bold py-2 rounded-lg text-xs shadow-lg hover:shadow-cyan-500/10 active:scale-[0.98] transition-all">Create Folder</button>
+    </div>
+  </div>
+
+  <!-- ==================== PAGE TV SEASONS / EPISODES LIST ==================== -->
+  <div id="page-tv-details" class="view-transition view-hidden w-full h-full flex flex-col">
+    <!-- Header -->
+    <header class="flex items-center gap-3 px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
+      <button id="btn-tv-back" class="text-slate-400 hover:text-white hover:bg-slate-800 p-1.5 rounded-lg transition-colors focus:outline-none">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="flex flex-col min-w-0 flex-1">
+        <span id="tv-show-title" class="font-bold text-sm text-white truncate leading-tight">Show Title</span>
+        <span id="tv-show-meta" class="text-[9px] text-slate-500 font-bold mt-0.5 uppercase tracking-wide">Select Season</span>
+      </div>
+    </header>
+
+    <!-- Scrollable content -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+      <div id="tv-seasons-container" class="space-y-2"></div>
+      <div id="tv-episodes-container" class="space-y-2 hidden"></div>
+    </div>
+  </div>
+
+  <!-- ==================== PAGE 2: THE TASK STREAMS GROUPING PAGE ==================== -->
+  <div id="page-task-streams" class="view-transition view-hidden w-full h-full flex flex-col">
+    <!-- Header -->
+    <header class="flex items-center gap-3 px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
+      <button id="btn-streams-back" class="text-slate-400 hover:text-white hover:bg-slate-800 p-1.5 rounded-lg transition-colors focus:outline-none">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="flex flex-col min-w-0 flex-1">
+        <span id="streams-page-title" class="font-bold text-sm text-white truncate leading-tight">Folder Name</span>
+        <span id="streams-page-meta" class="text-[9px] text-slate-500 font-bold mt-0.5 uppercase tracking-wide">Awaiting metadata</span>
+      </div>
+      <button id="btn-streams-activate" class="flex-shrink-0 px-2 py-1 text-[9px] font-bold rounded bg-slate-850 hover:bg-slate-800 text-slate-450 focus:outline-none">Activate Sniff</button>
+    </header>
+
+    <!-- Captured Streams Scroller -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <div id="streams-list-container" class="space-y-4"></div>
+    </div>
+
+    <!-- Actions Footer -->
+    <footer id="streams-footer" class="hidden p-4 border-t border-slate-800 bg-[#1E293B]/20 flex gap-2 flex-shrink-0 transition-all">
+      <button id="btn-deploy-tagged" class="flex-1 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-semibold py-2.5 px-3 rounded-lg shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 text-[11px]" title="Deploy Selected Streams">
+        <svg class="w-3.5 h-3.5 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="truncate">Proceed with Selected</span>
+      </button>
+    </footer>
+  </div>
+
+  <!-- ==================== PAGE 3: THE DEPLOYMENT CONTROL PAGE ==================== -->
+  <div id="page-player-deploy" class="view-transition view-hidden w-full h-full flex flex-col">
+    <!-- Header -->
+    <header class="flex items-center gap-3 px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
+      <button id="btn-player-back" class="text-slate-400 hover:text-white hover:bg-slate-800 p-1.5 rounded-lg transition-colors focus:outline-none">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="flex flex-col min-w-0 flex-1">
+        <span id="player-page-title" class="font-bold text-sm text-white truncate leading-tight">Verify Stream</span>
+        <span id="player-page-meta" class="text-[9px] text-cyan-400 font-bold mt-0.5 uppercase tracking-wide">Alternative Line</span>
+      </div>
+    </header>
+
+    <!-- Interactive Workspace -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <!-- Info Cards Grid -->
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="bg-[#1E293B]/40 border border-slate-800 p-3 rounded-xl">
+          <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Target TMDB ID</span>
+          <div id="player-meta-tmdb" class="text-slate-200 font-bold mt-0.5">-</div>
+        </div>
+        <div class="bg-[#1E293B]/40 border border-slate-800 p-3 rounded-xl">
+          <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Content Type</span>
+          <div id="player-meta-type" class="text-slate-200 font-bold mt-0.5 capitalize">-</div>
+        </div>
+      </div>
+
+      <!-- Selected Stream URL Display Card -->
+      <div class="bg-[#1E293B]/40 border border-slate-800 p-3 rounded-xl">
+        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Selected Media Source URL</span>
+        <div id="display-stream-url" class="text-[10px] font-mono text-cyan-300 break-all select-all mt-1 leading-normal max-h-[120px] overflow-y-auto custom-scrollbar">-</div>
+      </div>
+
+      <!-- Custom Source Paths (Manual override for local files/urls) -->
+      <div class="space-y-3 bg-[#1E293B]/20 border border-slate-800/60 p-3 rounded-xl">
+        <div class="flex flex-col">
+          <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Custom Local Sources (Optional Overrides)</span>
+          <span class="text-[8px] text-slate-500 mt-0.5">Paste absolute path (e.g. C:\Downloads\file.mp4) or custom URL.</span>
+        </div>
+        <div class="space-y-2">
+          <div class="space-y-1">
+            <label class="text-[8px] font-bold text-slate-450 uppercase tracking-wide">Custom Video Path / URL</label>
+            <input type="text" id="custom-video-input" placeholder="e.g. C:\Movies\video.mp4" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[8px] font-bold text-slate-450 uppercase tracking-wide">Custom Audio Path / URL</label>
+            <input type="text" id="custom-audio-input" placeholder="e.g. C:\Movies\audio.mp3" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-1.5 px-2.5 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Stream & Audio Selectors -->
+      <div class="grid grid-cols-2 gap-3.5">
+        <div class="space-y-1">
+          <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Quality Label</label>
+          <select id="quality-selector" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"></select>
+        </div>
+        <div class="space-y-1">
+          <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Audio Language</label>
+          <select id="language-selector" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"></select>
+        </div>
+      </div>
+      <div class="space-y-1 hidden" id="audio-selector-wrapper">
+        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Audio Track</label>
+        <select id="audio-selector" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"></select>
+      </div>
+
+      <div id="subtitles-wrapper" class="hidden space-y-2">
+        <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Available Subtitles</label>
+        <div id="subtitles-list" class="space-y-2 max-h-24 overflow-y-auto custom-scrollbar p-2 rounded-lg bg-[#1E293B]/40 border border-slate-800"></div>
+      </div>
+
+      <!-- Episodic metadata inputs -->
+      <div id="deploy-episodic-inputs-wrapper" class="hidden flex flex-col gap-3">
+        <div class="grid grid-cols-2 gap-3.5">
+          <div class="space-y-1">
+            <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Season Index</label>
+            <input type="number" id="deploy-season-input" placeholder="e.g. 1" min="0" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Episode Index</label>
+            <input type="number" id="deploy-episode-input" placeholder="e.g. 3" min="0" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions Footer -->
+    <footer class="p-4 border-t border-slate-800 bg-[#1E293B]/20 flex gap-2 flex-shrink-0">
+      <button id="btn-deploy-server" class="flex-1 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-semibold py-2.5 px-3 rounded-lg shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 text-[11px]" title="Deploy Folder to Server">
+        <svg id="icon-deploy-state" class="w-3.5 h-3.5 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+        </svg>
+        <span id="text-deploy-state" class="truncate">Deploy Folder</span>
+      </button>
+      <button id="btn-preview-stream" class="bg-[#1E293B] hover:bg-slate-850 text-white font-semibold py-2.5 px-3 rounded-lg border border-slate-700 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 text-[11px]" title="Preview Stream">
+        <svg class="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="truncate">Preview</span>
+      </button>
+      <button id="btn-download-stream" class="bg-[#1E293B] hover:bg-slate-850 text-white font-semibold py-2.5 px-3 rounded-lg border border-slate-700 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 text-[11px]" title="Download Stream">
+        <svg class="w-3.5 h-3.5 text-slate-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        <span class="truncate">Download</span>
+      </button>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
