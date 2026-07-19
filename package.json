@@ -1,5 +1,5 @@
 {
-  "name": "antigravity-stream-sniffer",
+  "name": "streamhome-extension",
   "version": "1.0.0",
   "description": "Secure Chrome Extension network sniffer",
   "main": "background.js",

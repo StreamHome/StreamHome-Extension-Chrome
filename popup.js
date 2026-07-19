@@ -67,7 +67,7 @@ function setCookie(name, value) {
       });
     } else {
       const data = {};
-      const key = name === 'serverHostUrl' ? 'serverUrl' : name;
+      const key = name === 'serverHostUrl' ? 'serverUrl' : (name === 'serverApiKey' ? 'apiKey' : name);
       data[key] = value;
       chrome.storage.local.set(data, () => {
         resolve();
@@ -81,7 +81,7 @@ function removeCookie(name) {
     if (typeof chrome !== 'undefined' && chrome.cookies) {
       chrome.cookies.remove({ url: COOKIE_URL, name: name }, () => { resolve(); });
     } else {
-      const key = name === 'serverHostUrl' ? 'serverUrl' : name;
+      const key = name === 'serverHostUrl' ? 'serverUrl' : (name === 'serverApiKey' ? 'apiKey' : name);
       chrome.storage.local.remove([key], () => { resolve(); });
     }
   });
@@ -177,6 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
   customAudioInput = document.getElementById('custom-audio-input');
 
   if (closeToast) closeToast.addEventListener('click', hideToast);
+  if (inputServerUrl) inputServerUrl.addEventListener('input', (e) => chrome.storage.local.set({ draftServerUrl: e.target.value }));
+  if (inputApiKey) inputApiKey.addEventListener('input', (e) => chrome.storage.local.set({ draftApiKey: e.target.value }));
+  if (inputTmdbApiKey) inputTmdbApiKey.addEventListener('input', (e) => chrome.storage.local.set({ draftTmdbApiKey: e.target.value }));
   if (btnVerifyConnect) btnVerifyConnect.addEventListener('click', verifyAndConnect);
   if (btnDashboardSettings) btnDashboardSettings.addEventListener('click', disconnectCredentials);
   if (btnCreateTask) btnCreateTask.addEventListener('click', openCreateTaskPanel);
@@ -269,7 +272,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     } else {
-      switchView('auth');
+      chrome.storage.local.get(['draftServerUrl', 'draftApiKey', 'draftTmdbApiKey'], (drafts) => {
+        if (drafts.draftServerUrl) inputServerUrl.value = drafts.draftServerUrl;
+        if (drafts.draftApiKey) inputApiKey.value = drafts.draftApiKey;
+        if (drafts.draftTmdbApiKey) inputTmdbApiKey.value = drafts.draftTmdbApiKey;
+        switchView('auth');
+      });
     }
   });
 
@@ -377,7 +385,10 @@ async function verifyAndConnect() {
     serverUrl: savedServerUrl, 
     apiKey: savedApiKey,
     tmdbApiKey: savedTmdbApiKey
-  }, () => { switchView('dashboard'); });
+  }, () => { 
+    chrome.storage.local.remove(['draftServerUrl', 'draftApiKey', 'draftTmdbApiKey']);
+    switchView('dashboard'); 
+  });
 }
 
 async function disconnectCredentials() {
@@ -385,7 +396,7 @@ async function disconnectCredentials() {
   await removeCookie('serverApiKey');
   await removeCookie('tmdbApiKey');
 
-  chrome.storage.local.remove(['apiKey', 'serverUrl', 'tmdbApiKey'], () => {
+  chrome.storage.local.remove(['apiKey', 'serverUrl', 'tmdbApiKey', 'draftServerUrl', 'draftApiKey', 'draftTmdbApiKey'], () => {
     savedApiKey = '';
     inputApiKey.value = '';
     switchView('auth');
@@ -670,10 +681,6 @@ function openCreateTaskPanel() {
   tmdbSuggestions.innerHTML = '';
   tmdbSuggestions.classList.add('hidden');
   taskTypeIndicatorWrapper.classList.add('hidden');
-  taskEpisodicInputsWrapper.classList.add('hidden');
-  taskEpisodicInputsWrapper.style.maxHeight = '0px';
-  inputTaskSeason.value = '';
-  inputTaskEpisode.value = '';
   selectedTmdbId = null;
   selectedTitle = '';
   selectedContentType = 'movie';
@@ -746,23 +753,6 @@ function selectTmdbItem(item, title, year) {
 
   taskTypeIndicator.textContent = selectedContentType === 'series' ? 'TV / Series' : 'Movie';
   taskTypeIndicatorWrapper.classList.remove('hidden');
-  toggleCreateTaskType(selectedContentType);
-}
-
-function toggleCreateTaskType(type) {
-  if (type === 'movie') {
-    taskEpisodicInputsWrapper.classList.remove('opacity-100', 'pointer-events-auto');
-    taskEpisodicInputsWrapper.classList.add('opacity-0', 'pointer-events-none');
-    taskEpisodicInputsWrapper.style.maxHeight = '0px';
-    inputTaskSeason.removeAttribute('required');
-    inputTaskEpisode.removeAttribute('required');
-  } else {
-    taskEpisodicInputsWrapper.classList.remove('opacity-0', 'pointer-events-none');
-    taskEpisodicInputsWrapper.classList.add('opacity-100', 'pointer-events-auto');
-    taskEpisodicInputsWrapper.style.maxHeight = '100px';
-    inputTaskSeason.setAttribute('required', 'true');
-    inputTaskEpisode.setAttribute('required', 'true');
-  }
 }
 
 function saveNewTask() {
@@ -793,7 +783,7 @@ function saveNewTask() {
   chrome.storage.local.get(['scanned_tasks'], (result) => {
     const tasks = result.scanned_tasks || [];
     const duplicateIndex = tasks.findIndex(t => t.id == newTask.id && t.season === newTask.season && t.episode === newTask.episode);
-    if (duplicateIndex !== -1) { displayError('A task with this ID and episode targets already exists.'); return; }
+    if (duplicateIndex !== -1) { displayError('A task for this title already exists.'); return; }
 
     tasks.push(newTask);
     chrome.storage.local.set({ scanned_tasks: tasks }, () => { switchView('dashboard'); });
@@ -1430,11 +1420,23 @@ function populateSubtitles() {
             const lang = sub.lang || 'unknown';
             const id = `sub-checkbox-${index}`;
             const checkboxWrapper = document.createElement('div');
-            checkboxWrapper.className = 'flex items-center gap-2 bg-slate-900/50 p-2 rounded-md text-xs';
+            checkboxWrapper.className = 'flex items-center gap-2 bg-slate-900/50 p-2 rounded-md text-xs group';
             checkboxWrapper.innerHTML = `
                 <input id="${id}" type="checkbox" value="${sub.url}" data-lang="${lang}" class="h-4 w-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-600 focus:ring-offset-slate-800">
                 <label for="${id}" class="text-slate-300 flex-1 truncate cursor-pointer" title="${sub.url}">${sub.label} (${lang.toUpperCase()})</label>
             `;
+            
+            const rightSide = document.createElement('button');
+            rightSide.className = 'text-[9px] font-bold text-cyan-500 hover:text-cyan-300 bg-cyan-950/50 hover:bg-cyan-900/80 px-2 py-0.5 rounded border border-cyan-800/40 transition-colors opacity-80 hover:opacity-100 flex-shrink-0';
+            rightSide.textContent = 'Read';
+            rightSide.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const readerUrl = `reader.html?url=${encodeURIComponent(sub.url)}&label=${encodeURIComponent(sub.label || lang)}`;
+              chrome.tabs.create({ url: readerUrl });
+            });
+            checkboxWrapper.appendChild(rightSide);
+            
             subtitlesList.appendChild(checkboxWrapper);
         });
     } else {
@@ -1485,7 +1487,7 @@ function triggerStreamDownloads() {
   });
 }
 
-function deployMetadataPayload() {
+async function deployMetadataPayload() {
   const customVideo = customVideoInput ? customVideoInput.value.trim() : '';
   const customAudio = customAudioInput ? customAudioInput.value.trim() : '';
 
@@ -1544,6 +1546,30 @@ function deployMetadataPayload() {
     payload.episode = episode;
   }
   
+  // Fetch skip markers from TheIntroDB
+  let introDbUrl = `https://api.theintrodb.org/v3/media?tmdb_id=${currentTaskContext.id}`;
+  if (currentTaskContext.type === 'series' && payload.season && payload.episode) {
+    introDbUrl += `&season=${payload.season}&episode=${payload.episode}`;
+  }
+  
+  try {
+    const introRes = await fetch(introDbUrl);
+    if (introRes.ok) {
+      const data = await introRes.json();
+      payload.skip_markers = {
+        intro: data.intro || [],
+        recap: data.recap || [],
+        credits: data.credits || [],
+        preview: data.preview || []
+      };
+    } else {
+      payload.skip_markers = { intro: [], recap: [], credits: [], preview: [] };
+    }
+  } catch (err) {
+    console.error("Failed to fetch skip markers:", err);
+    payload.skip_markers = { intro: [], recap: [], credits: [], preview: [] };
+  }
+
   const requestUrl = `${savedServerUrl}/api/add-movie`;
 
   fetch(requestUrl, {

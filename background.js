@@ -1,4 +1,4 @@
-console.log("[DEBUG] Antigravity Persistent Sniffer Service Worker Started.");
+console.log("[DEBUG] StreamHome Persistent Sniffer Service Worker Started.");
 
 const BLACKLIST_EXTENSIONS = [
   '.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.bmp', '.ico',
@@ -7,7 +7,7 @@ const BLACKLIST_EXTENSIONS = [
 
 const BLACKLISTED_MIMES = [
   'text/css', 'application/javascript', 'application/x-javascript',
-  'image/', 'font/'
+  'image/', 'font/', 'application/json', 'text/html', 'text/plain', 'application/xml'
 ];
 
 // Helper to extract resolution numbers
@@ -43,7 +43,7 @@ function parseDashManifest(text) {
 
 async function detectManifestQualities(url, type, extractedHeaders) {
   try {
-    const fetchHeaders = {};
+    const fetchHeaders = { 'X-StreamHome-Sniffer': 'true' };
     if (extractedHeaders.referer) fetchHeaders['Referer'] = extractedHeaders.referer;
     if (extractedHeaders.origin) fetchHeaders['Origin'] = extractedHeaders.origin;
     if (extractedHeaders['user-agent']) fetchHeaders['User-Agent'] = extractedHeaders['user-agent'];
@@ -134,6 +134,9 @@ if (typeof chrome !== 'undefined' && chrome.webRequest) {
   chrome.webRequest.onSendHeaders.addListener(
     async (details) => {
       if (details.requestHeaders) {
+        const isInternal = details.requestHeaders.some(h => h.name.toLowerCase() === 'x-streamhome-sniffer');
+        if (isInternal) return;
+
         if (chrome.storage && chrome.storage.session) {
           try {
             await chrome.storage.session.set({
@@ -170,7 +173,7 @@ if (typeof chrome !== 'undefined' && chrome.webRequest) {
       if (!details.url || !details.url.startsWith("http")) return;
 
       const urlObj = new URL(details.url);
-      if (urlObj.pathname.match(/\.ts$|\.m4s$|\.m2ts$/i)) {
+      if (urlObj.pathname.match(/\.ts$|\.m4s$|\.m2ts$|chunk|seg-|fragment|part\d+|init/i)) {
         return;
       }
 
@@ -252,6 +255,13 @@ if (typeof chrome !== 'undefined' && chrome.webRequest) {
       const isMediaMime = contentType.startsWith('video/') || contentType.startsWith('audio/');
       const isMediaDetailType = details.type === 'media';
 
+      const hasValidMediaMime = isMediaMime || isHlsMime || isDashMime || isSubtitleMime;
+      const hasValidMediaExt = isVideoExt || isAudioExt || isHlsExt || isDashExt || isSubtitleExt;
+
+      if (isMediaDetailType && !hasValidMediaMime && !hasValidMediaExt) {
+        return;
+      }
+
       if (isSubtitleExt || isSubtitleMime) {
         processAndStoreStream(details.url, 'subtitle', requestHeaders, details.tabId);
         return;
@@ -298,26 +308,32 @@ function getStreamSignature(url) {
 function processAndStoreStream(url, type = 'video', requestHeaders = null, sourceTabId = -1) {
   if (url.includes('chrome-extension://')) return;
 
-  const extractedHeaders = extractKeyHeaders(requestHeaders);
-  const qualityPromise = (type === 'm3u8' || type === 'mpd')
-    ? detectManifestQualities(url, type, extractedHeaders)
-    : Promise.resolve(null);
+  chrome.storage.local.get(['activeTaskId', 'activeTabId'], (preCheck) => {
+    if (!preCheck.activeTaskId) return;
+    if (preCheck.activeTabId && sourceTabId !== -1 && sourceTabId !== preCheck.activeTabId) return;
 
-  qualityPromise.then((detectedQualities) => {
-    runInQueue((next) => {
-      chrome.storage.local.get(['scanned_tasks', 'activeTaskId', 'activeTabId', 'learned_patterns'], (result) => {
-        const activeTaskId = result.activeTaskId;
-        const activeTabId = result.activeTabId;
-        const tasks = result.scanned_tasks || [];
-        const patterns = result.learned_patterns || { video_patterns: [], audio_patterns: [], favorite_patterns: [] };
+    const extractedHeaders = extractKeyHeaders(requestHeaders);
+    const qualityPromise = (type === 'm3u8' || type === 'mpd')
+      ? detectManifestQualities(url, type, extractedHeaders)
+      : Promise.resolve(null);
 
-        if (!activeTaskId) {
-          next();
-          return;
-        }
+    qualityPromise.then((detectedQualities) => {
+      runInQueue((next) => {
+        chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
+          // Re-verify in case it was turned off during the fetch
+          chrome.storage.local.get(['activeTaskId', 'activeTabId'], (postCheck) => {
+            const activeTaskId = postCheck.activeTaskId;
+            const activeTabId = postCheck.activeTabId;
+            const tasks = result.scanned_tasks || [];
+            const patterns = result.learned_patterns || { video_patterns: [], audio_patterns: [], favorite_patterns: [] };
 
-        // Verify Tab Scope: Ignore streams from other tabs (allow -1 for Service Workers)
-        if (activeTabId && sourceTabId !== -1 && sourceTabId !== activeTabId) {
+            if (!activeTaskId) {
+              next();
+              return;
+            }
+
+            // Verify Tab Scope: Ignore streams from other tabs (allow -1 for Service Workers)
+            if (activeTabId && sourceTabId !== -1 && sourceTabId !== activeTabId) {
           next();
           return;
         }
@@ -441,9 +457,11 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
 
           next();
         });
-      });
-    });
-  });
+      }); // closes postCheck
+    }); // closes result
+  }); // closes runInQueue
+}); // closes qualityPromise.then
+}); // closes preCheck
 }
 
 // =========================================================================

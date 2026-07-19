@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Antigravity Task Sniffer</title>
+  <title>StreamHome Task Sniffer</title>
   <link rel="stylesheet" href="styles.css">
   <style>
     html, body {
@@ -72,10 +72,8 @@
   <!-- ==================== VIEW 1: AUTHENTICATION GATE ==================== -->
   <div id="page-auth" class="view-transition view-visible w-full h-full flex flex-col justify-between p-6">
     <div class="flex flex-col items-center text-center mt-6">
-      <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-4 animate-pulse">
-        <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 00-2 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-        </svg>
+      <div class="w-16 h-16 mb-4" style="width: 64px; height: 64px; border: none; box-shadow: none;">
+        <img src="icon.png" alt="StreamHome Logo" class="w-full h-full object-contain" style="width: 100%; height: 100%; object-fit: contain; border: none; box-shadow: none;">
       </div>
       <h2 class="text-lg font-extrabold text-white tracking-tight">System Authenticator</h2>
       <p class="text-[10px] text-slate-400 mt-1 max-w-[240px]">Link the traffic sniffer to your central media deployment server.</p>
@@ -109,7 +107,9 @@
     <!-- Header -->
     <header class="flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
       <div class="flex items-center gap-2">
-        <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center font-extrabold text-xs text-white">A</div>
+        <div class="w-6 h-6" style="width: 24px; height: 24px; border: none; box-shadow: none;">
+          <img src="icon.png" alt="StreamHome Logo" class="w-full h-full object-contain" style="width: 100%; height: 100%; object-fit: contain; border: none; box-shadow: none;">
+        </div>
         <span class="font-extrabold text-xs tracking-wider uppercase text-slate-200">Tasks</span>
       </div>
       <button id="btn-dashboard-settings" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none" title="Disconnect API Session">
@@ -171,19 +171,7 @@
         <span id="task-type-indicator" class="text-[10px] font-extrabold text-cyan-400 uppercase tracking-wider bg-cyan-950/80 border border-cyan-800/40 px-2 py-0.5 rounded">Movie</span>
       </div>
 
-      <!-- Episodic metadata wrapper -->
-      <div id="task-episodic-inputs-wrapper" class="flex flex-col gap-3 overflow-hidden transition-all duration-350 opacity-0 pointer-events-none max-h-0">
-        <div class="grid grid-cols-2 gap-3.5">
-          <div class="space-y-1">
-            <label class="text-[9px] font-bold text-slate-450 uppercase tracking-wider">Season Index</label>
-            <input type="number" id="input-task-season" placeholder="e.g. 1" min="1" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-[9px] font-bold text-slate-450 uppercase tracking-wider">Episode Index</label>
-            <input type="number" id="input-task-episode" placeholder="e.g. 3" min="1" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
-          </div>
-        </div>
-      </div>
+
     </div>
 
     <!-- Create Dialog Footer -->

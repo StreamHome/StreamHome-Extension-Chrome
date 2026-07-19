@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Antigravity Stream Sniffer",
+  "name": "StreamHome Extension",
   "version": "1.0.0",
   "description": "Secure, authenticated network sniffer for media streams.",
   "permissions": [
@@ -23,12 +23,12 @@
     "type": "module"
   },
   "icons": {
-    "128": "icon.jpg"
+    "128": "icon.png"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Antigravity Stream",
-    "default_icon": "icon.jpg"
+    "default_title": "StreamHome",
+    "default_icon": "icon.png"
   },
   "web_accessible_resources": [
     {
