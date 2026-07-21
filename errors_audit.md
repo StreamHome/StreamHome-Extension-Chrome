@@ -124,3 +124,23 @@ This document details all bugs, inconsistencies, structural issues, and function
   ```
 * **Problem**: `taskEpisodicInputsWrapper`, `inputTaskSeason`, and `inputTaskEpisode` are defined and queried in the popup script initialization, but these elements do not exist in `popup.html` (they were cleaned up/removed when season/episode inputs were moved to the deploy page).
 * **Impact**: Redundant variables and dead DOM queries.
+
+---
+
+## 8. Cookie/Storage Desynchronization and Fallback Bug (Session Management Defect)
+* **Location**: `popup.js` (Lines 30-54, 248-260)
+* **Problem**: In `popup.js`, the extension stores credentials in both localhost cookies and `chrome.storage.local`. When the popup is opened, the `getCookies()` function checks `chrome.cookies` if available. However, if those cookies are null (e.g. they were cleared by the user, blocked, or not accessible due to incognito mode/cookie policies), the function returns nulls. Because there is no fallback inside the `chrome.cookies` resolve path to try loading the values from `chrome.storage.local`, the extension forces the user to the log in screen (`auth` view), even though valid credentials are still stored in `chrome.storage.local`.
+* **Impact**: Users are unexpectedly logged out of the extension and forced to re-authenticate if localhost cookies are cleared, blocked, or unavailable.
+
+---
+
+## 9. TheIntroDB Query Parameter Specials Bug (Falsy Season/Episode 0)
+* **Location**: `popup.js` (Lines 1613-1615)
+* **Code**:
+  ```javascript
+  if (currentTaskContext.type === 'series' && payload.season && payload.episode) {
+    introDbUrl += `&season=${payload.season}&episode=${payload.episode}`;
+  }
+  ```
+* **Problem**: When fetching skip markers from TheIntroDB API for TV show episodes, the code checks if `payload.season && payload.episode` is truthy before appending them as query parameters. In JavaScript, `0` is a falsy value. Therefore, if the user tries to deploy an episode from Season 0 (often used for TV Show specials/extras) or Episode 0, the check fails, and the query parameters `season` and `episode` are omitted from the request URL. This causes the API to return either incorrect markers or fail to find the media.
+* **Impact**: Unable to fetch skip markers for any TV show specials (Season 0) or episodes numbered 0.
