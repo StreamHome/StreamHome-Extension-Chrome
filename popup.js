@@ -33,11 +33,24 @@ function getCookies() {
       chrome.cookies.get({ url: COOKIE_URL, name: 'serverHostUrl' }, (c1) => {
         chrome.cookies.get({ url: COOKIE_URL, name: 'serverApiKey' }, (c2) => {
           chrome.cookies.get({ url: COOKIE_URL, name: 'tmdbApiKey' }, (c3) => {
-            resolve({
+            const result = {
               serverUrl: c1 ? decodeURIComponent(c1.value) : null,
               apiKey: c2 ? decodeURIComponent(c2.value) : null,
               tmdbApiKey: c3 ? decodeURIComponent(c3.value) : null
-            });
+            };
+
+            // Fallback to storage.local if any cookie values are missing
+            if (!result.serverUrl || !result.apiKey || !result.tmdbApiKey) {
+              chrome.storage.local.get(['serverUrl', 'apiKey', 'tmdbApiKey'], (localRes) => {
+                resolve({
+                  serverUrl: result.serverUrl || localRes.serverUrl || null,
+                  apiKey: result.apiKey || localRes.apiKey || null,
+                  tmdbApiKey: result.tmdbApiKey || localRes.tmdbApiKey || null
+                });
+              });
+            } else {
+              resolve(result);
+            }
           });
         });
       });
@@ -1618,7 +1631,7 @@ async function deployMetadataPayload() {
   
   // Fetch skip markers from TheIntroDB
   let introDbUrl = `https://api.theintrodb.org/v3/media?tmdb_id=${currentTaskContext.id}`;
-  if (currentTaskContext.type === 'series' && payload.season && payload.episode) {
+  if (currentTaskContext.type === 'series' && typeof payload.season === 'number' && typeof payload.episode === 'number') {
     introDbUrl += `&season=${payload.season}&episode=${payload.episode}`;
   }
   
