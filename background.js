@@ -446,7 +446,7 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
             const typeLabel = type === 'm3u8' ? 'HLS' : type === 'mpd' ? 'DASH' : type === 'subtitle' ? 'Subtitle' : 'Video';
             chrome.notifications.create({
               type: 'basic',
-              iconUrl: 'icon.jpg',
+              iconUrl: 'icon.png',
               title: `New Stream Discovered (${resLabel} ${typeLabel})`,
               message: `Found source for "${task.title}". Click to configure.`,
               priority: 1
@@ -468,6 +468,9 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
 // DECLARATIVE NET REQUEST DYNAMIC BYPASS RULES
 // =========================================================================
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Determine rule ID dynamically from tab ID to avoid collisions
+  const ruleId = (sender.tab && sender.tab.id) ? sender.tab.id : 1001;
+
   if (message.action === 'set_bypass_rules') {
     const { targetUrl, headers } = message;
     if (!targetUrl) return;
@@ -487,8 +490,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         requestHeaders.push({ header: 'user-agent', operation: 'set', value: headers['user-agent'] });
       }
 
+      // If no headers to spoof, just remove any rule for this tab and return
+      if (requestHeaders.length === 0) {
+        chrome.declarativeNetRequest.updateSessionRules({
+          removeRuleIds: [ruleId]
+        });
+        return;
+      }
+
       const rule = {
-        id: 1001,
+        id: ruleId,
         priority: 1,
         action: {
           type: 'modifyHeaders',
@@ -501,13 +512,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       };
 
       chrome.declarativeNetRequest.updateSessionRules({
-        removeRuleIds: [1001],
+        removeRuleIds: [ruleId],
         addRules: [rule]
       }, () => {
         if (chrome.runtime.lastError) {
-          console.error("[DEBUG] DNR Session Rules Registration Failed:", chrome.runtime.lastError);
+          console.error(`[DEBUG] DNR Session Rules Registration Failed for Rule ${ruleId}:`, chrome.runtime.lastError);
         } else {
-          console.log("[DEBUG] Successfully registered DNR Referer bypass rules for host:", host);
+          console.log(`[DEBUG] Successfully registered DNR Referer bypass rules for host ${host} (Rule ${ruleId})`);
         }
       });
     } catch (e) {
@@ -515,9 +526,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   } else if (message.action === 'clear_bypass_rules') {
     chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [1001]
+      removeRuleIds: [ruleId]
     }, () => {
-      console.log("[DEBUG] Cleared active DNR Referer bypass rules (Rule 1001).");
+      console.log(`[DEBUG] Cleared active DNR Referer bypass rules (Rule ${ruleId}).`);
     });
   } else if (message.action === 'update_stream_quality') {
     const { url, resolution } = message;
@@ -529,7 +540,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         let updated = false;
 
         tasks.forEach(task => {
+          let hasUrl = false;
           if (task.rawStreams && task.rawStreams.includes(url)) {
+            hasUrl = true;
+          } else if (task.type === 'series' && task.episodes) {
+            for (const epKey in task.episodes) {
+              if (task.episodes[epKey].rawStreams && task.episodes[epKey].rawStreams.includes(url)) {
+                hasUrl = true;
+                break;
+              }
+            }
+          }
+
+          if (hasUrl) {
             task.streamQualities = task.streamQualities || {};
             task.streamQualities[url] = [resolution];
             updated = true;

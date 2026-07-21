@@ -93,7 +93,7 @@ let pageAuth, pageDashboard, pageCreateTask, pageTaskStreams, pagePlayerDeploy, 
 let inputServerUrl, inputApiKey, inputTmdbApiKey, btnVerifyConnect;
 let btnDashboardSettings, btnCreateTask, tasksContainer, dashboardEmptyState;
 let inputTaskSearch, tmdbSuggestions, taskTypeIndicatorWrapper, taskTypeIndicator;
-let taskEpisodicInputsWrapper, inputTaskSeason, inputTaskEpisode, btnCancelTask, btnSaveTask;
+let btnCancelTask, btnSaveTask;
 let btnStreamsBack, streamsPageTitle, streamsPageMeta, btnStreamsActivate, streamsListContainer;
 let btnTvBack, tvShowTitle, tvShowMeta, tvSeasonsContainer, tvEpisodesContainer;
 let streamsFooter, btnDeployTagged;
@@ -145,9 +145,6 @@ document.addEventListener('DOMContentLoaded', () => {
   tmdbSuggestions = document.getElementById('tmdb-suggestions');
   taskTypeIndicatorWrapper = document.getElementById('task-type-indicator-wrapper');
   taskTypeIndicator = document.getElementById('task-type-indicator');
-  taskEpisodicInputsWrapper = document.getElementById('task-episodic-inputs-wrapper');
-  inputTaskSeason = document.getElementById('input-task-season');
-  inputTaskEpisode = document.getElementById('input-task-episode');
   btnCancelTask = document.getElementById('btn-cancel-task');
   btnSaveTask = document.getElementById('btn-save-task');
 
@@ -1486,8 +1483,19 @@ function populateSubtitles() {
             rightSide.addEventListener('click', (e) => {
               e.preventDefault();
               e.stopPropagation();
-              const readerUrl = `reader.html?url=${encodeURIComponent(sub.url)}&label=${encodeURIComponent(sub.label || lang)}`;
-              chrome.tabs.create({ url: readerUrl });
+              
+              const subHeaders = (currentTaskContext && currentTaskContext.capturedHeaders && currentTaskContext.capturedHeaders[sub.url])
+                ? currentTaskContext.capturedHeaders[sub.url]
+                : {};
+              
+              const readerParams = new URLSearchParams();
+              readerParams.set('url', sub.url);
+              readerParams.set('label', sub.label || lang);
+              if (subHeaders.referer) readerParams.set('referer', subHeaders.referer);
+              if (subHeaders.origin) readerParams.set('origin', subHeaders.origin);
+              if (subHeaders['user-agent']) readerParams.set('useragent', subHeaders['user-agent']);
+
+              chrome.tabs.create({ url: `reader.html?${readerParams.toString()}` });
             });
             checkboxWrapper.appendChild(rightSide);
             
@@ -1873,6 +1881,7 @@ function deleteStreamRecord(taskId, url) {
     // Always remove from the primary/unscoped rawStreams
     removeFromArray(task.rawStreams, url);
 
+    chrome.storage.local.set({ scanned_tasks: tasks });
   });
 }
 

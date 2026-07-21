@@ -26,6 +26,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  const referer = params.get('referer');
+  const origin = params.get('origin');
+  const useragent = params.get('useragent');
+
+  // Trigger dynamic header bypass configuration for the subtitle request
+  const bypassHeaders = {};
+  if (referer) bypassHeaders.referer = referer;
+  if (origin) bypassHeaders.origin = origin;
+  if (useragent) bypassHeaders['user-agent'] = useragent;
+
+  if (referer || origin || useragent) {
+    chrome.runtime.sendMessage({
+      action: 'set_bypass_rules',
+      targetUrl: url,
+      headers: bypassHeaders
+    });
+  }
+
+  // Cleanup dynamic DNR rules when the tab unloads
+  window.addEventListener('beforeunload', () => {
+    chrome.runtime.sendMessage({ action: 'clear_bypass_rules' });
+  });
+
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Server responded with HTTP ${res.status}`);
