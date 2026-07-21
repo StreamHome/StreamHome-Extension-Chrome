@@ -105,6 +105,18 @@ let qualitySelector, languageSelector, audioSelector, audioSelectorWrapper, subt
 let deploySeasonInput, deployEpisodeInput, deployEpisodicInputsWrapper;
 let customVideoInput, customAudioInput;
 
+// Custom Records Cached variables
+let btnCustomRecordsNav, pageCustomRecords, customRecordsListContainer, customRecordsEmptyState, btnCustomRecordsBack;
+let inputCustomSubUrl, inputCustomSubLang, btnAddCustomSub;
+let editingRecordId = null;
+
+// Create Custom Record elements
+let btnCustomRecordsAdd, modalCreateCustomRecord, inputCreateRecordName, inputCreateRecordSearch;
+let createRecordTmdbSuggestions, createRecordTypeWrapper, createRecordTypeIndicator;
+let btnModalCreateCancel, btnModalCreateSave;
+let selectedCreateTmdbId = null, selectedCreateTitle = '', selectedCreateType = '';
+let createSearchDebounceTimer;
+
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -176,6 +188,28 @@ document.addEventListener('DOMContentLoaded', () => {
   customVideoInput = document.getElementById('custom-video-input');
   customAudioInput = document.getElementById('custom-audio-input');
 
+  btnCustomRecordsNav = document.getElementById('btn-custom-records-nav');
+  pageCustomRecords = document.getElementById('page-custom-records');
+  customRecordsListContainer = document.getElementById('custom-records-list-container');
+  customRecordsEmptyState = document.getElementById('custom-records-empty-state');
+  btnCustomRecordsBack = document.getElementById('btn-custom-records-back');
+
+
+
+  inputCustomSubUrl = document.getElementById('input-custom-sub-url');
+  inputCustomSubLang = document.getElementById('input-custom-sub-lang');
+  btnAddCustomSub = document.getElementById('btn-add-custom-sub');
+
+  btnCustomRecordsAdd = document.getElementById('btn-custom-records-add');
+  modalCreateCustomRecord = document.getElementById('modal-create-custom-record');
+  inputCreateRecordName = document.getElementById('input-create-record-name');
+  inputCreateRecordSearch = document.getElementById('input-create-record-search');
+  createRecordTmdbSuggestions = document.getElementById('create-record-tmdb-suggestions');
+  createRecordTypeWrapper = document.getElementById('create-record-type-wrapper');
+  createRecordTypeIndicator = document.getElementById('create-record-type-indicator');
+  btnModalCreateCancel = document.getElementById('btn-modal-create-cancel');
+  btnModalCreateSave = document.getElementById('btn-modal-create-save');
+
   if (closeToast) closeToast.addEventListener('click', hideToast);
   if (inputServerUrl) inputServerUrl.addEventListener('input', (e) => chrome.storage.local.set({ draftServerUrl: e.target.value }));
   if (inputApiKey) inputApiKey.addEventListener('input', (e) => chrome.storage.local.set({ draftApiKey: e.target.value }));
@@ -192,6 +226,13 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnDownloadStream) btnDownloadStream.addEventListener('click', triggerStreamDownloads);
   if (btnPreviewStream) btnPreviewStream.addEventListener('click', onPreviewClick);
   if (btnDeployServer) btnDeployServer.addEventListener('click', deployMetadataPayload);
+  if (btnCustomRecordsNav) btnCustomRecordsNav.addEventListener('click', () => switchView('customRecords'));
+  if (btnCustomRecordsBack) btnCustomRecordsBack.addEventListener('click', () => switchView('dashboard'));
+
+  if (btnAddCustomSub) btnAddCustomSub.addEventListener('click', addCustomSubtitleTrack);
+  if (btnCustomRecordsAdd) btnCustomRecordsAdd.addEventListener('click', openCreateCustomRecordModal);
+  if (btnModalCreateCancel) btnModalCreateCancel.addEventListener('click', closeCreateCustomRecordModal);
+  if (btnModalCreateSave) btnModalCreateSave.addEventListener('click', saveNewCustomRecord);
   if (qualitySelector) qualitySelector.addEventListener('change', (e) => onQualityChange(e.target.value));
   if (audioSelector) {
     audioSelector.addEventListener('change', (e) => {
@@ -202,6 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   initAutocompleteSearch();
+  initCreateRecordSearch();
 
   getCookies().then((cookies) => {
     if (cookies.serverUrl) {
@@ -326,7 +368,8 @@ function switchView(target) {
     createTask: pageCreateTask,
     taskStreams: pageTaskStreams,
     playerDeploy: pagePlayerDeploy,
-    tvDetails: pageTvDetails
+    tvDetails: pageTvDetails,
+    customRecords: pageCustomRecords
   };
 
   Object.keys(views).forEach(key => {
@@ -349,6 +392,8 @@ function switchView(target) {
     loadDashboardPage();
   } else if (target === 'taskStreams') {
     loadTaskStreamsPage();
+  } else if (target === 'customRecords') {
+    loadCustomRecordsPage();
   }
 }
 
@@ -713,12 +758,12 @@ async function fetchTmdbSuggestions(query) {
   const url = `https://api.themoviedb.org/3/search/multi?api_key=${savedTmdbApiKey}&query=${encodeURIComponent(query)}&language=en-US`;
   try {
     const response = await fetch(url);
-    if (!response.ok) throw new Error(`TMDB Search failed with status ${response.status}`);
+    if (!response.ok) throw new Error(translateHttpStatus(response.status));
     const data = await response.json();
     renderTmdbSuggestions(data.results || []);
   } catch (err) {
     console.error("[DEBUG] TMDB Fetch Error:", err);
-    displayError('Failed to search TMDB titles.');
+    displayError(err.message || 'Failed to search TMDB titles.');
   }
 }
 
@@ -1240,9 +1285,18 @@ function onDeployTaggedClick() {
   openPlayerDeployPage(currentTaskContext, dummyVideo, availableStreams, audioItem);
 }
 
-function navigateBackToStreams() { switchView('taskStreams'); }
+function navigateBackToStreams() {
+  if (editingRecordId) {
+    saveCustomRecordWithoutModal();
+    switchView('customRecords');
+  } else {
+    switchView('taskStreams');
+  }
+}
 
 function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null) {
+  editingRecordId = null;
+
   if (customVideoInput) customVideoInput.value = '';
   if (customAudioInput) customAudioInput.value = '';
 
@@ -1331,7 +1385,7 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null) {
 
 function populateQualitySelector(url, task) {
     qualitySelector.innerHTML = '';
-    let qualities = ['1080p', '720p', '480p', '360p', 'Unknown'];
+    let qualities = ['4K (2160p)', '1080p', '720p', '480p', '360p', 'HLS / M3U8', 'DASH / MPD', 'Progressive MP4', 'Unknown'];
     
     if (task && task.streamQualities && task.streamQualities[url]) {
       const list = task.streamQualities[url];
@@ -1417,13 +1471,13 @@ function populateSubtitles() {
     if (availableSubtitles.length > 0) {
         subtitlesWrapper.classList.remove('hidden');
         availableSubtitles.forEach((sub, index) => {
-            const lang = sub.lang || 'unknown';
+            const lang = sub.lang || sub.language || 'en';
             const id = `sub-checkbox-${index}`;
             const checkboxWrapper = document.createElement('div');
             checkboxWrapper.className = 'flex items-center gap-2 bg-slate-900/50 p-2 rounded-md text-xs group';
             checkboxWrapper.innerHTML = `
                 <input id="${id}" type="checkbox" value="${sub.url}" data-lang="${lang}" class="h-4 w-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-600 focus:ring-offset-slate-800">
-                <label for="${id}" class="text-slate-300 flex-1 truncate cursor-pointer" title="${sub.url}">${sub.label} (${lang.toUpperCase()})</label>
+                <label for="${id}" class="text-slate-300 flex-1 truncate cursor-pointer" title="${sub.url}">${sub.label || lang.toUpperCase()} (${lang.toUpperCase()})</label>
             `;
             
             const rightSide = document.createElement('button');
@@ -1488,6 +1542,10 @@ function triggerStreamDownloads() {
 }
 
 async function deployMetadataPayload() {
+  if (editingRecordId) {
+    saveCustomRecordWithoutModal();
+  }
+
   const customVideo = customVideoInput ? customVideoInput.value.trim() : '';
   const customAudio = customAudioInput ? customAudioInput.value.trim() : '';
 
@@ -1510,27 +1568,31 @@ async function deployMetadataPayload() {
     ? currentTaskContext.capturedHeaders[selectedStreamUrl]
     : {};
   
-  const selectedLanguage = languageSelector.value;
+  const selectedLanguage = languageSelector ? languageSelector.value : 'en';
   const selectedSubtitles = [];
   if (subtitlesList) {
     const subtitleCheckboxes = subtitlesList.querySelectorAll('input[type="checkbox"]:checked');
     subtitleCheckboxes.forEach(checkbox => {
+        let code = checkbox.dataset.lang || 'en';
+        if (code === 'unknown') code = 'en';
         selectedSubtitles.push({
-            language: checkbox.dataset.lang || 'unknown',
-            url: checkbox.value
+            language: code,
+            url: formatLocalPathToServerUrl(checkbox.value)
         });
     });
   }
 
   // RULE-COMPLIANT PAYLOAD GENERATION
   const payload = {
-    video_url: finalStreamUrl,
-    audio_url: selectedAudioUrl || null,
+    video_url: formatLocalPathToServerUrl(finalStreamUrl),
+    audio_url: selectedAudioUrl ? formatLocalPathToServerUrl(selectedAudioUrl) : null,
     media_type: currentTaskContext.type === 'series' ? 'tv' : 'movie',
-    tmdb_id: currentTaskContext.id,
+    tmdb_id: parseInt(currentTaskContext.id, 10),
+    season: null,
+    episode: null,
     headers: headers || {},
-    quality: selectedQuality || 'Unknown',
-    language: selectedLanguage || 'en',
+    quality: (selectedQuality && selectedQuality !== 'Unknown') ? selectedQuality : '1080p',
+    language: (selectedLanguage && selectedLanguage !== 'other') ? selectedLanguage : 'en',
     subtitles: selectedSubtitles
   };
   
@@ -1556,12 +1618,7 @@ async function deployMetadataPayload() {
     const introRes = await fetch(introDbUrl);
     if (introRes.ok) {
       const data = await introRes.json();
-      payload.skip_markers = {
-        intro: data.intro || [],
-        recap: data.recap || [],
-        credits: data.credits || [],
-        preview: data.preview || []
-      };
+      payload.skip_markers = convertSkipMarkers(data);
     } else {
       payload.skip_markers = { intro: [], recap: [], credits: [], preview: [] };
     }
@@ -1581,12 +1638,11 @@ async function deployMetadataPayload() {
     body: JSON.stringify(payload)
   })
   .then(async (response) => {
-    if (response.status === 401 || response.status === 403) {
-      displayError('Unauthorized connection credentials.');
+    if (!response.ok) {
+      displayError(translateHttpStatus(response.status));
       resetDeployButtonState();
       return;
     }
-    if (!response.ok) throw new Error(`Deployment responded with HTTP ${response.status}`);
 
     btnDeployServer.className = 'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all text-xs';
     textDeployState.textContent = 'Injected';
@@ -1594,7 +1650,13 @@ async function deployMetadataPayload() {
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
     `;
 
-    setTimeout(() => { switchView('taskStreams'); }, 1200);
+    setTimeout(() => {
+      if (editingRecordId) {
+        switchView('customRecords');
+      } else {
+        switchView('taskStreams');
+      }
+    }, 1200);
   })
   .catch((err) => {
     resetDeployButtonState();
@@ -1811,6 +1873,492 @@ function deleteStreamRecord(taskId, url) {
     // Always remove from the primary/unscoped rawStreams
     removeFromArray(task.rawStreams, url);
 
-    chrome.storage.local.set({ scanned_tasks: tasks });
   });
+}
+
+// ==================== CUSTOM RECORDS SYSTEM ====================
+
+function loadCustomRecordsPage() {
+  chrome.storage.local.get(['custom_records'], (result) => {
+    const records = result.custom_records || [];
+    renderCustomRecords(records);
+  });
+}
+
+function renderCustomRecords(records) {
+  if (!customRecordsListContainer) return;
+  customRecordsListContainer.innerHTML = '';
+
+  if (records.length === 0) {
+    if (customRecordsEmptyState) customRecordsEmptyState.style.display = 'flex';
+    return;
+  }
+
+  if (customRecordsEmptyState) customRecordsEmptyState.style.display = 'none';
+
+  records.forEach((record) => {
+    const card = document.createElement('div');
+    card.className = 'bg-[#1E293B] border border-slate-800 p-4.5 rounded-xl transition-all duration-200 hover:border-slate-700/80 flex flex-col gap-2 relative overflow-hidden group cursor-pointer';
+    
+    const episodicInfo = record.media_type === 'tv' ? ` · S${record.season} E${record.episode}` : '';
+    const videoUrlDisplay = record.video_url || 'No Video Source';
+
+    card.innerHTML = `
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-lg bg-cyan-950/20 text-cyan-400 border border-cyan-800/30 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <div class="flex flex-col min-w-0">
+            <span class="font-bold text-sm text-slate-100 truncate max-w-[210px] group-hover:text-cyan-300 transition-colors">${record.name}</span>
+            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">${record.title}${episodicInfo}</span>
+          </div>
+        </div>
+        <button class="btn-delete-record text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-850 transition-colors focus:outline-none flex-shrink-0" title="Delete Record">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>
+      </div>
+      <div class="text-[9px] font-mono text-cyan-300/80 truncate break-all bg-slate-900/40 p-2 rounded-md border border-slate-850/50 mt-1 leading-normal max-w-full">
+        ${videoUrlDisplay}
+      </div>
+      <div class="flex flex-wrap gap-1.5 mt-1">
+        <span class="text-[8px] font-extrabold text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700/40 capitalize">${record.media_type === 'tv' ? 'tv series' : 'movie'}</span>
+        <span class="text-[8px] font-extrabold text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-900/30 uppercase">${record.quality || 'unknown'}</span>
+        <span class="text-[8px] font-extrabold text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700/40 uppercase">${record.language || 'en'}</span>
+        ${record.subtitles && record.subtitles.length > 0 ? `<span class="text-[8px] font-extrabold text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-900/30 uppercase">${record.subtitles.length} Sub(s)</span>` : ''}
+      </div>
+    `;
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-delete-record')) return;
+      openCustomRecordInDeployPage(record);
+    });
+
+    const btnDel = card.querySelector('.btn-delete-record');
+    btnDel.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteCustomRecord(record.id);
+    });
+
+    customRecordsListContainer.appendChild(card);
+  });
+}
+
+function deleteCustomRecord(id) {
+  chrome.storage.local.get(['custom_records'], (result) => {
+    let records = result.custom_records || [];
+    records = records.filter(r => r.id != id);
+    chrome.storage.local.set({ custom_records: records }, () => {
+      loadCustomRecordsPage();
+    });
+  });
+}
+
+function openCustomRecordInDeployPage(record) {
+  editingRecordId = record.id;
+
+  // Setup mock task context
+  currentTaskContext = {
+    id: record.tmdb_id,
+    title: record.title,
+    type: record.media_type === 'tv' ? 'series' : 'movie',
+    capturedHeaders: {}
+  };
+
+  selectedStreamUrl = record.video_url || '';
+  selectedAudioUrl = record.audio_url || '';
+  selectedQuality = record.quality || 'Unknown';
+
+  // UI elements
+  playerPageTitle.textContent = record.title;
+  playerPageMeta.textContent = `Custom Record: ${record.name}`;
+  displayStreamUrl.textContent = selectedStreamUrl || 'No video source specified yet. Please enter a custom video path/URL below.';
+
+  playerMetaTmdb.textContent = record.tmdb_id;
+  playerMetaType.textContent = record.media_type;
+
+  if (customVideoInput) customVideoInput.value = record.video_url || '';
+  if (customAudioInput) customAudioInput.value = record.audio_url || '';
+
+  populateLanguageSelector();
+  populateQualitySelector(null, null);
+
+  if (qualitySelector) {
+    // Make sure option exists or add it
+    let exists = false;
+    for (let i = 0; i < qualitySelector.options.length; i++) {
+      if (qualitySelector.options[i].value === selectedQuality) exists = true;
+    }
+    if (!exists && selectedQuality) {
+      const opt = document.createElement('option');
+      opt.value = selectedQuality;
+      opt.textContent = selectedQuality;
+      qualitySelector.appendChild(opt);
+    }
+    qualitySelector.value = selectedQuality;
+  }
+
+  if (languageSelector) {
+    languageSelector.value = record.language || 'en';
+  }
+
+  // Episodic controls
+  if (record.media_type === 'tv') {
+    if (deployEpisodicInputsWrapper) deployEpisodicInputsWrapper.classList.remove('hidden');
+    if (deploySeasonInput) {
+      deploySeasonInput.disabled = false;
+      deploySeasonInput.classList.remove('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
+      deploySeasonInput.value = record.season || '';
+    }
+    if (deployEpisodeInput) {
+      deployEpisodeInput.disabled = false;
+      deployEpisodeInput.classList.remove('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
+      deployEpisodeInput.value = record.episode || '';
+    }
+  } else {
+    if (deployEpisodicInputsWrapper) deployEpisodicInputsWrapper.classList.add('hidden');
+  }
+
+  // Populate subtitles checkboxes
+  availableSubtitles = record.subtitles || [];
+  populateSubtitles();
+  // Check them all by default since they were saved to the record
+  if (subtitlesList) {
+    const checkboxes = subtitlesList.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = true);
+  }
+
+  switchView('playerDeploy');
+}
+
+function saveCustomRecordWithoutModal() {
+  if (!editingRecordId) return;
+
+  const customVideo = customVideoInput ? customVideoInput.value.trim() : '';
+  const customAudio = customAudioInput ? customAudioInput.value.trim() : '';
+
+  const finalStreamUrl = customVideo || selectedStreamUrl;
+  const finalAudioUrl = customAudio || (audioSelector ? audioSelector.value : '');
+
+  const selectedLanguage = languageSelector ? languageSelector.value : 'en';
+  const selectedSubtitles = [];
+  if (subtitlesList) {
+    const subtitleCheckboxes = subtitlesList.querySelectorAll('input[type="checkbox"]:checked');
+    subtitleCheckboxes.forEach(checkbox => {
+      const code = checkbox.dataset.lang || 'en';
+      selectedSubtitles.push({
+        lang: code,
+        language: code,
+        url: checkbox.value,
+        label: code.toUpperCase()
+      });
+    });
+  }
+
+  const mediaType = playerMetaType ? playerMetaType.textContent : 'movie';
+  let season = null;
+  let episode = null;
+
+  if (mediaType === 'tv' || mediaType === 'series') {
+    if (deploySeasonInput) season = parseInt(deploySeasonInput.value, 10);
+    if (deployEpisodeInput) episode = parseInt(deployEpisodeInput.value, 10);
+    if (isNaN(season) || season === null || isNaN(episode) || episode === null) {
+      season = 1;
+      episode = 1;
+    }
+  }
+
+  chrome.storage.local.get(['custom_records'], (result) => {
+    const records = result.custom_records || [];
+    const idx = records.findIndex(r => r.id === editingRecordId);
+    if (idx !== -1) {
+      records[idx].video_url = finalStreamUrl;
+      records[idx].audio_url = finalAudioUrl;
+      records[idx].quality = selectedQuality || 'Unknown';
+      records[idx].language = selectedLanguage;
+      records[idx].subtitles = selectedSubtitles;
+      records[idx].season = season;
+      records[idx].episode = episode;
+
+      chrome.storage.local.set({ custom_records: records });
+    }
+  });
+}
+
+function addCustomSubtitleTrack() {
+  if (!inputCustomSubUrl || !inputCustomSubLang) return;
+  const url = inputCustomSubUrl.value.trim();
+  const lang = inputCustomSubLang.value.trim().toLowerCase();
+
+  if (!url) {
+    displayError('Please enter a valid subtitle track URL or path.');
+    return;
+  }
+  if (!lang) {
+    displayError('Please specify a subtitle language code (e.g. en).');
+    return;
+  }
+
+  // Push new subtitle and re-populate the checklist
+  availableSubtitles.push({
+    url: url,
+    lang: lang,
+    label: lang.toUpperCase()
+  });
+
+  populateSubtitles();
+
+  // Clear inputs
+  inputCustomSubUrl.value = '';
+  inputCustomSubLang.value = '';
+
+  // Check the newly added item (it should be the last item in subtitles-list)
+  if (subtitlesList) {
+    const checkboxes = subtitlesList.querySelectorAll('input[type="checkbox"]');
+    if (checkboxes.length > 0) {
+      checkboxes[checkboxes.length - 1].checked = true;
+    }
+  }
+}
+
+// ==================== CREATE CUSTOM RECORD FLOW ====================
+
+function openCreateCustomRecordModal() {
+  if (!modalCreateCustomRecord) return;
+  
+  // Clear inputs
+  if (inputCreateRecordName) inputCreateRecordName.value = '';
+  if (inputCreateRecordSearch) inputCreateRecordSearch.value = '';
+  if (createRecordTmdbSuggestions) {
+    createRecordTmdbSuggestions.innerHTML = '';
+    createRecordTmdbSuggestions.classList.add('hidden');
+  }
+  if (createRecordTypeWrapper) createRecordTypeWrapper.classList.add('hidden');
+  
+  selectedCreateTmdbId = null;
+  selectedCreateTitle = '';
+  selectedCreateType = '';
+  
+  modalCreateCustomRecord.classList.remove('hidden');
+  if (inputCreateRecordName) inputCreateRecordName.focus();
+}
+
+function closeCreateCustomRecordModal() {
+  if (modalCreateCustomRecord) modalCreateCustomRecord.classList.add('hidden');
+}
+
+function initCreateRecordSearch() {
+  if (!inputCreateRecordSearch) return;
+  inputCreateRecordSearch.addEventListener('input', () => {
+    clearTimeout(createSearchDebounceTimer);
+    const query = inputCreateRecordSearch.value.trim();
+    if (query.length < 2) {
+      createRecordTmdbSuggestions.innerHTML = '';
+      createRecordTmdbSuggestions.classList.add('hidden');
+      return;
+    }
+    createSearchDebounceTimer = setTimeout(() => { fetchCreateRecordSuggestions(query); }, 300);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target !== inputCreateRecordSearch && e.target !== createRecordTmdbSuggestions) {
+      if (createRecordTmdbSuggestions) createRecordTmdbSuggestions.classList.add('hidden');
+    }
+  });
+}
+
+async function fetchCreateRecordSuggestions(query) {
+  if (!savedTmdbApiKey) { displayError('TMDB API Key missing. Please reconnect credentials.'); return; }
+  const url = `https://api.themoviedb.org/3/search/multi?api_key=${savedTmdbApiKey}&query=${encodeURIComponent(query)}&language=en-US`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(translateHttpStatus(response.status));
+    const data = await response.json();
+    renderCreateRecordSuggestions(data.results || []);
+  } catch (err) {
+    console.error("[DEBUG] TMDB Fetch Error:", err);
+    displayError(err.message || 'Failed to search TMDB titles.');
+  }
+}
+
+function renderCreateRecordSuggestions(results) {
+  if (!createRecordTmdbSuggestions) return;
+  createRecordTmdbSuggestions.innerHTML = '';
+
+  const filtered = results.filter(item => item.media_type === 'movie' || item.media_type === 'tv');
+  if (filtered.length === 0) {
+    createRecordTmdbSuggestions.classList.add('hidden');
+    return;
+  }
+
+  filtered.slice(0, 5).forEach(item => {
+    const title = item.title || item.name || 'Unknown Title';
+    const year = (item.release_date || item.first_air_date || '').split('-')[0];
+    const yrStr = year ? ` (${year})` : '';
+    const typeLabel = item.media_type === 'tv' ? 'TV' : 'Movie';
+
+    const div = document.createElement('div');
+    div.className = 'px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 cursor-pointer border-b border-slate-850/60 last:border-0 truncate';
+    div.innerHTML = `
+      <div class="font-bold truncate">${title}${yrStr}</div>
+      <div class="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">${typeLabel}</div>
+    `;
+
+    div.addEventListener('click', () => {
+      selectCreateRecordItem(item, title);
+    });
+
+    createRecordTmdbSuggestions.appendChild(div);
+  });
+
+  createRecordTmdbSuggestions.classList.remove('hidden');
+}
+
+function selectCreateRecordItem(item, title) {
+  selectedCreateTmdbId = item.id;
+  selectedCreateTitle = title;
+  selectedCreateType = item.media_type; // 'tv' or 'movie'
+
+  if (createRecordTypeIndicator) {
+    createRecordTypeIndicator.textContent = selectedCreateType === 'tv' ? 'TV / Series' : 'Movie';
+  }
+  if (createRecordTypeWrapper) {
+    createRecordTypeWrapper.classList.remove('hidden');
+  }
+  if (createRecordTmdbSuggestions) {
+    createRecordTmdbSuggestions.innerHTML = '';
+    createRecordTmdbSuggestions.classList.add('hidden');
+  }
+  if (inputCreateRecordSearch) {
+    inputCreateRecordSearch.value = title;
+  }
+}
+
+function saveNewCustomRecord() {
+  if (!inputCreateRecordName || !selectedCreateTmdbId || !selectedCreateTitle) {
+    displayError('Please enter a record name and select a valid title from TMDB suggestions.');
+    return;
+  }
+
+  const name = inputCreateRecordName.value.trim();
+  if (!name) {
+    displayError('Please specify a name for the custom record.');
+    return;
+  }
+
+  chrome.storage.local.get(['custom_records'], (result) => {
+    const records = result.custom_records || [];
+    
+    // Create new record with empty media fields but complete metadata
+    const newRec = {
+      id: 'rec_' + Date.now(),
+      name: name,
+      tmdb_id: selectedCreateTmdbId,
+      title: selectedCreateTitle,
+      media_type: selectedCreateType === 'tv' ? 'tv' : 'movie',
+      season: 1, // default
+      episode: 1, // default
+      video_url: '',
+      audio_url: '',
+      quality: '1080p',
+      language: 'en',
+      subtitles: []
+    };
+
+    records.push(newRec);
+
+    chrome.storage.local.set({ custom_records: records }, () => {
+      closeCreateCustomRecordModal();
+      loadCustomRecordsPage(); // refresh custom records page
+    });
+  });
+}
+
+function translateHttpStatus(status) {
+  const codes = {
+    400: "Bad Request (400) - The server could not understand the request because it was malformed (e.g., invalid payload or parameter format).",
+    401: "Unauthorized (401) - Authentication failed. Your API key or connection credentials are missing or invalid.",
+    403: "Forbidden (403) - The server refused to authorize the request (e.g., incorrect API permissions).",
+    404: "Not Found (404) - The server could not find the requested API endpoint or resource.",
+    405: "Method Not Allowed (405) - The server does not support the request method for this API endpoint.",
+    408: "Request Timeout (408) - The server timed out waiting for the request to finish.",
+    429: "Too Many Requests (429) - Rate limit exceeded. Please wait a bit before requesting again.",
+    500: "Internal Server Error (500) - The server encountered an internal error and could not complete the request.",
+    502: "Bad Gateway (502) - The server received an invalid response from the upstream server.",
+    503: "Service Unavailable (503) - The server is temporarily offline, overloaded, or down for maintenance.",
+    504: "Gateway Timeout (504) - The server did not receive a timely response from an upstream server."
+  };
+  return codes[status] || `HTTP Error (${status}) - An unexpected network response error occurred.`;
+}
+
+function convertSkipMarkers(dbMarkers) {
+  const skip_markers = {
+    intro: [],
+    recap: [],
+    credits: [],
+    preview: []
+  };
+
+  const convertArray = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.map(marker => {
+      // TheIntroDB returns start_ms/end_ms, the server expects start/end in seconds
+      const startSec = typeof marker.start === 'number' ? marker.start : (marker.start_ms / 1000.0 || 0.0);
+      const endSec = typeof marker.end === 'number' ? marker.end : (marker.end_ms / 1000.0 || 0.0);
+      return {
+        start: parseFloat(startSec.toFixed(2)),
+        end: parseFloat(endSec.toFixed(2))
+      };
+    });
+  };
+
+  if (dbMarkers) {
+    skip_markers.intro = convertArray(dbMarkers.intro);
+    skip_markers.recap = convertArray(dbMarkers.recap);
+    skip_markers.credits = convertArray(dbMarkers.credits);
+    skip_markers.preview = convertArray(dbMarkers.preview);
+  }
+
+  return skip_markers;
+}
+
+function formatLocalPathToServerUrl(inputPath) {
+  if (!inputPath) return '';
+  const trimmed = inputPath.trim();
+  if (trimmed.toLowerCase().startsWith('http://') || trimmed.toLowerCase().startsWith('https://')) {
+    return trimmed;
+  }
+
+  // Strip file:/// if present
+  let cleanPath = trimmed;
+  if (cleanPath.toLowerCase().startsWith('file:///')) {
+    cleanPath = cleanPath.substring(8);
+  }
+
+  // Look for /media/ or \media\ to extract relative path under media directory
+  const mediaIndex = cleanPath.toLowerCase().replace(/\\/g, '/').indexOf('/media/');
+  if (mediaIndex !== -1) {
+    const relativePart = cleanPath.substring(mediaIndex + 7).replace(/\\/g, '/');
+    return `${savedServerUrl}/media/${relativePart}`;
+  }
+
+  // If it's a relative path or doesn't have a drive letter/absolute prefix, assume it is under media
+  if (!cleanPath.includes(':') && !cleanPath.startsWith('/') && !cleanPath.startsWith('\\')) {
+    return `${savedServerUrl}/media/${cleanPath.replace(/\\/g, '/')}`;
+  }
+
+  // If it's an absolute path outside media folder, fallback to serving from media/Movies/ or media/
+  // by grabbing the filename and placing it under media/
+  const parts = cleanPath.split(/[\\/]/);
+  const filename = parts[parts.length - 1];
+  // Determine if it's a subtitle
+  const isSubtitle = cleanPath.toLowerCase().endsWith('.vtt') || cleanPath.toLowerCase().endsWith('.srt');
+  if (isSubtitle) {
+    return `${savedServerUrl}/media/Subtitles/${filename}`;
+  }
+  return `${savedServerUrl}/media/Movies/${filename}`;
 }
