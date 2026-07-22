@@ -32,6 +32,7 @@ Last verified: 2026-07-22
 - Credential drafts retained after logout without auto-login (`a6bcf0a`).
 - Capture-card layout and hierarchy repaired (`334b617`).
 - Deployment-page choices retained per task/episode/source and saved deployment (`1fb1fd7`).
+- Button colors normalized to semantic Ember roles across popup, player, reader, and dynamic states (`0738f0e`).
 - Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
 
 ## Verification completed
@@ -42,6 +43,7 @@ Last verified: 2026-07-22
 - Browser inspection of popup, player, reader, and capture-card geometry.
 - Mocked logout storage contract.
 - Mocked deployment-draft persistence, restoration, context isolation, and saved-record write ordering.
+- Rendered computed-color audit confirming matching button/SVG foregrounds and consistent popup/player/reader button surfaces.
 
 ## Next candidates
 

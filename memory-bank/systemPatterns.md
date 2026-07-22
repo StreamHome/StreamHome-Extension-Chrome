@@ -52,6 +52,8 @@ Some sources require captured headers such as Referer or Origin. Player and read
 
 `styles.css` is generated from `input.css` by Tailwind. `ember-ui.css` is authored directly and supplies StreamHome identity: deep brown surfaces, ember-orange actions, peach text, thin borders, square terminal-like controls, subtle grid/scanline texture, and short state transitions.
 
+Button color is owned by semantic classes and state attributes in `ember-ui.css`, not by Tailwind palette utilities embedded in markup or JavaScript. Primary and secondary controls share stable foreground inheritance through `currentColor`; destructive, active/listening, loading/disabled, stream-tag, favorite, and success states use explicit Ember variables or palette-derived values.
+
 Critical popup geometry is expressed with valid Tailwind utilities plus explicit component CSS. Dynamic cards provide keyboard activation and accessible names; destructive nested controls stop event propagation.
 
 ## Deployment boundary

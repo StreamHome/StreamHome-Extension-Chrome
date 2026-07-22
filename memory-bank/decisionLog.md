@@ -49,3 +49,7 @@ The directory remains matched by `.gitignore` for incidental local notes. The us
 ## 12. Store deployment drafts per context
 
 Deployment controls must survive popup closure without leaking choices into another title, episode, source, or saved deployment. Task draft keys include media identity, episode scope, and a stable hash of the selected source; saved deployments use their record ID. Each draft stores the form controls and subtitle state under its own `chrome.storage.local` key, while `activeDeploymentKey` identifies the surface to restore. Saved-deployment writes are awaited before navigation or submission continues.
+
+## 13. Give buttons semantic Ember roles
+
+Buttons must not carry legacy cyan, purple, slate, emerald, or amber utility colors as their visual contract. Primary, secondary, icon, destructive, inline, toggle, and stream-action roles are defined in `ember-ui.css`; JavaScript changes semantic state through attributes or role classes. Child SVGs inherit `currentColor`, destructive actions use `--ember-error`, listening and stream selections use Ember orange/peach, disabled deployment is muted, and successful deployment uses `--ember-success`.
