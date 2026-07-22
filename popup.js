@@ -12,6 +12,10 @@ let currentStreamItem = null;
 let currentTaskContext = null;
 let selectedStreamUrl = null;
 let selectedAudioUrl = null;
+let activeDeploymentKey = null;
+let isRestoringDeploymentDraft = false;
+
+const DEPLOYMENT_DRAFT_PREFIX = 'deploymentDraft:';
 
 // Create Task search variables
 let selectedTmdbId = null;
@@ -247,7 +251,19 @@ document.addEventListener('DOMContentLoaded', () => {
   if (audioSelector) {
     audioSelector.addEventListener('change', (e) => {
       selectedAudioUrl = e.target.value;
-      chrome.storage.local.set({ selectedAudioUrl: selectedAudioUrl });
+      persistDeploymentDraft();
+    });
+  }
+  if (languageSelector) languageSelector.addEventListener('change', persistDeploymentDraft);
+  if (customVideoInput) customVideoInput.addEventListener('input', persistDeploymentDraft);
+  if (customAudioInput) customAudioInput.addEventListener('input', persistDeploymentDraft);
+  if (deploySeasonInput) deploySeasonInput.addEventListener('input', persistDeploymentDraft);
+  if (deployEpisodeInput) deployEpisodeInput.addEventListener('input', persistDeploymentDraft);
+  if (inputCustomSubUrl) inputCustomSubUrl.addEventListener('input', persistDeploymentDraft);
+  if (inputCustomSubLang) inputCustomSubLang.addEventListener('input', persistDeploymentDraft);
+  if (subtitlesList) {
+    subtitlesList.addEventListener('change', (event) => {
+      if (event.target && event.target.matches('input[type="checkbox"]')) persistDeploymentDraft();
     });
   }
 
@@ -272,49 +288,13 @@ document.addEventListener('DOMContentLoaded', () => {
       savedTmdbApiKey = cookies.tmdbApiKey || '';
       inputTmdbApiKey.value = savedTmdbApiKey;
 
-      chrome.storage.local.get(['activeTaskId', 'activeView', 'currentTaskId', 'currentStreamItem', 'selectedStreamUrl', 'selectedAudioUrl'], (result) => {
+      chrome.storage.local.get(['activeTaskId', 'activeView', 'currentTaskId', 'currentStreamItem', 'selectedStreamUrl', 'selectedAudioUrl', 'activeDeploymentKey'], (result) => {
         activeTaskId = result.activeTaskId || null;
         currentTaskId = result.currentTaskId || null;
         const targetView = result.activeView || 'dashboard';
 
         if (targetView === 'playerDeploy') {
-          chrome.storage.local.get(['scanned_tasks'], (taskRes) => {
-            const tasks = taskRes.scanned_tasks || [];
-            const task = tasks.find(t => t.id == currentTaskId);
-            if (task && result.currentStreamItem) {
-              let rawUrls = task.rawStreams || [];
-              let renderTask = task;
-              if (task.type === 'series') {
-                const season = task.activeSeason || 1;
-                const episode = task.activeEpisode || 1;
-                const epKey = `${season}x${episode}`;
-                if (task.episodes && task.episodes[epKey]) {
-                  rawUrls = task.episodes[epKey].rawStreams || [];
-                }
-                renderTask = {
-                  id: task.id,
-                  title: task.title,
-                  type: task.type,
-                  season: season,
-                  episode: episode,
-                  rawStreams: rawUrls,
-                  favorites: (task.episodes && task.episodes[epKey]) ? (task.episodes[epKey].favorites || []) : [],
-                  taggedVideoUrl: (task.episodes && task.episodes[epKey]) ? task.episodes[epKey].taggedVideoUrl : null,
-                  taggedAudioUrl: (task.episodes && task.episodes[epKey]) ? task.episodes[epKey].taggedAudioUrl : null,
-                  capturedHeaders: task.capturedHeaders || {},
-                  streamQualities: task.streamQualities || {}
-                };
-              }
-              
-              currentStreamItem = result.currentStreamItem;
-              selectedStreamUrl = result.selectedStreamUrl;
-              selectedAudioUrl = result.selectedAudioUrl;
-              
-              openPlayerDeployPage(renderTask, currentStreamItem, rawUrls);
-            } else {
-              switchView('dashboard');
-            }
-          });
+          restorePlayerDeployView(result);
         } else if (targetView === 'tvDetails') {
           chrome.storage.local.get(['scanned_tasks'], (taskRes) => {
             const tasks = taskRes.scanned_tasks || [];
@@ -434,6 +414,245 @@ function makeKeyboardActivatable(element, action, label) {
     event.preventDefault();
     action();
   });
+}
+
+function hashDeploymentIdentity(value) {
+  let hash = 2166136261;
+  const text = String(value || '');
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function getTaskDeploymentKey(task, streamUrl) {
+  const season = task && task.type === 'series' ? (task.season ?? task.activeSeason ?? '-') : '-';
+  const episode = task && task.type === 'series' ? (task.episode ?? task.activeEpisode ?? '-') : '-';
+  return `task:${task ? task.type : 'unknown'}:${task ? task.id : 'unknown'}:${season}:${episode}:${hashDeploymentIdentity(streamUrl)}`;
+}
+
+function getCustomRecordDeploymentKey(recordId) {
+  return `customRecord:${recordId}`;
+}
+
+function getDeploymentDraftStorageKey(contextKey) {
+  return `${DEPLOYMENT_DRAFT_PREFIX}${contextKey}`;
+}
+
+function getSelectedSubtitleUrls() {
+  if (!subtitlesList) return [];
+  return Array.from(subtitlesList.querySelectorAll('input[type="checkbox"]:checked')).map((checkbox) => checkbox.value);
+}
+
+function getSerializableSubtitles() {
+  return (availableSubtitles || [])
+    .filter((subtitle) => subtitle && subtitle.url)
+    .map((subtitle) => ({
+      url: subtitle.url,
+      lang: subtitle.lang || subtitle.language || 'en',
+      language: subtitle.language || subtitle.lang || 'en',
+      label: subtitle.label || subtitle.lang || subtitle.language || 'Subtitle'
+    }));
+}
+
+function collectDeploymentDraft() {
+  if (!activeDeploymentKey || !currentTaskContext) return null;
+
+  const selectedAudio = audioSelector ? audioSelector.value : (selectedAudioUrl || '');
+  const quality = qualitySelector ? qualitySelector.value : selectedQuality;
+
+  return {
+    version: 1,
+    kind: editingRecordId ? 'customRecord' : 'task',
+    contextKey: activeDeploymentKey,
+    taskId: editingRecordId ? null : (currentTaskId ?? currentTaskContext.id),
+    recordId: editingRecordId || null,
+    currentStreamItem: currentStreamItem || null,
+    selectedStreamUrl: selectedStreamUrl || '',
+    selectedAudioUrl: selectedAudio || '',
+    selectedQuality: quality || 'Unknown',
+    language: languageSelector ? languageSelector.value : 'en',
+    customVideo: customVideoInput ? customVideoInput.value : '',
+    customAudio: customAudioInput ? customAudioInput.value : '',
+    availableSubtitles: getSerializableSubtitles(),
+    selectedSubtitleUrls: getSelectedSubtitleUrls(),
+    pendingSubtitleUrl: inputCustomSubUrl ? inputCustomSubUrl.value : '',
+    pendingSubtitleLanguage: inputCustomSubLang ? inputCustomSubLang.value : '',
+    season: deploySeasonInput ? deploySeasonInput.value : '',
+    episode: deployEpisodeInput ? deployEpisodeInput.value : '',
+    updatedAt: Date.now()
+  };
+}
+
+function persistDeploymentDraft() {
+  if (isRestoringDeploymentDraft || activeView !== 'playerDeploy') return Promise.resolve();
+  const draft = collectDeploymentDraft();
+  if (!draft) return Promise.resolve();
+
+  selectedQuality = draft.selectedQuality;
+  selectedAudioUrl = draft.selectedAudioUrl;
+
+  const storageKey = getDeploymentDraftStorageKey(activeDeploymentKey);
+  return new Promise((resolve) => {
+    chrome.storage.local.set({
+      [storageKey]: draft,
+      activeDeploymentKey: activeDeploymentKey,
+      currentStreamItem: draft.currentStreamItem,
+      selectedStreamUrl: draft.selectedStreamUrl,
+      selectedAudioUrl: draft.selectedAudioUrl
+    }, resolve);
+  });
+}
+
+function loadDeploymentDraft(contextKey, callback) {
+  if (!contextKey) {
+    callback(null);
+    return;
+  }
+  const storageKey = getDeploymentDraftStorageKey(contextKey);
+  chrome.storage.local.get([storageKey], (result) => callback(result[storageKey] || null));
+}
+
+function addSelectOptionIfMissing(select, value) {
+  if (!select || !value) return;
+  const exists = Array.from(select.options).some((option) => option.value === value);
+  if (exists) return;
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = value;
+  select.appendChild(option);
+}
+
+function applyDeploymentDraft(draft) {
+  if (!draft) return;
+  isRestoringDeploymentDraft = true;
+
+  try {
+    if (draft.currentStreamItem) currentStreamItem = draft.currentStreamItem;
+    if (typeof draft.selectedStreamUrl === 'string') selectedStreamUrl = draft.selectedStreamUrl;
+
+    if (customVideoInput) customVideoInput.value = draft.customVideo || '';
+    if (customAudioInput) customAudioInput.value = draft.customAudio || '';
+    if (inputCustomSubUrl) inputCustomSubUrl.value = draft.pendingSubtitleUrl || '';
+    if (inputCustomSubLang) inputCustomSubLang.value = draft.pendingSubtitleLanguage || '';
+
+    if (qualitySelector) {
+      addSelectOptionIfMissing(qualitySelector, draft.selectedQuality);
+      qualitySelector.value = draft.selectedQuality || qualitySelector.value;
+      selectedQuality = qualitySelector.value || 'Unknown';
+    }
+
+    if (audioSelector) {
+      const audioExists = Array.from(audioSelector.options).some((option) => option.value === draft.selectedAudioUrl);
+      audioSelector.value = audioExists ? (draft.selectedAudioUrl || '') : '';
+      selectedAudioUrl = audioSelector.value;
+    }
+
+    if (languageSelector) {
+      addSelectOptionIfMissing(languageSelector, draft.language);
+      languageSelector.value = draft.language || 'en';
+    }
+
+    if (Object.prototype.hasOwnProperty.call(draft, 'season') && deploySeasonInput) {
+      deploySeasonInput.value = draft.season ?? '';
+    }
+    if (Object.prototype.hasOwnProperty.call(draft, 'episode') && deployEpisodeInput) {
+      deployEpisodeInput.value = draft.episode ?? '';
+    }
+
+    const subtitlesByUrl = new Map();
+    [...(availableSubtitles || []), ...(draft.availableSubtitles || [])].forEach((subtitle) => {
+      if (subtitle && subtitle.url) subtitlesByUrl.set(subtitle.url, subtitle);
+    });
+    availableSubtitles = Array.from(subtitlesByUrl.values());
+    populateSubtitles();
+
+    const selectedSubtitleUrls = new Set(draft.selectedSubtitleUrls || []);
+    if (subtitlesList) {
+      subtitlesList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+        checkbox.checked = selectedSubtitleUrls.has(checkbox.value);
+      });
+    }
+
+    if (displayStreamUrl) {
+      displayStreamUrl.textContent = selectedStreamUrl || 'No video source specified yet. Please enter a custom video path/URL below.';
+    }
+  } finally {
+    isRestoringDeploymentDraft = false;
+  }
+}
+
+function restorePlayerDeployView(state) {
+  const restoreFromDraft = (draft) => {
+    if (draft && draft.kind === 'customRecord' && draft.recordId) {
+      chrome.storage.local.get(['custom_records'], (recordResult) => {
+        const records = recordResult.custom_records || [];
+        const record = records.find((item) => item.id == draft.recordId);
+        if (record) {
+          openCustomRecordInDeployPage(record, draft);
+        } else {
+          switchView('customRecords');
+        }
+      });
+      return;
+    }
+
+    const taskId = draft && draft.taskId != null ? draft.taskId : state.currentTaskId;
+    chrome.storage.local.get(['scanned_tasks'], (taskResult) => {
+      const tasks = taskResult.scanned_tasks || [];
+      const task = tasks.find((item) => item.id == taskId);
+      let streamItem = draft && draft.currentStreamItem ? draft.currentStreamItem : state.currentStreamItem;
+      if (!streamItem && draft && draft.selectedStreamUrl) {
+        streamItem = {
+          videoUrl: draft.selectedStreamUrl,
+          label: 'Saved selection',
+          quality: draft.selectedQuality || 'Unknown'
+        };
+      }
+
+      if (!task || !streamItem) {
+        switchView('dashboard');
+        return;
+      }
+
+      currentTaskId = task.id;
+      let rawUrls = task.rawStreams || [];
+      let renderTask = task;
+      if (task.type === 'series') {
+        const season = task.activeSeason ?? task.season ?? 1;
+        const episode = task.activeEpisode ?? task.episode ?? 1;
+        const episodeKey = `${season}x${episode}`;
+        const episodeData = task.episodes && task.episodes[episodeKey] ? task.episodes[episodeKey] : null;
+        if (episodeData) rawUrls = episodeData.rawStreams || [];
+        renderTask = {
+          id: task.id,
+          title: task.title,
+          type: task.type,
+          season: season,
+          episode: episode,
+          rawStreams: rawUrls,
+          favorites: episodeData ? (episodeData.favorites || []) : [],
+          taggedVideoUrl: episodeData ? episodeData.taggedVideoUrl : null,
+          taggedAudioUrl: episodeData ? episodeData.taggedAudioUrl : null,
+          capturedHeaders: task.capturedHeaders || {},
+          streamQualities: task.streamQualities || {}
+        };
+      }
+
+      currentStreamItem = streamItem;
+      selectedStreamUrl = draft && typeof draft.selectedStreamUrl === 'string' ? draft.selectedStreamUrl : state.selectedStreamUrl;
+      selectedAudioUrl = draft && typeof draft.selectedAudioUrl === 'string' ? draft.selectedAudioUrl : state.selectedAudioUrl;
+      openPlayerDeployPage(renderTask, streamItem, rawUrls, null, draft || null);
+    });
+  };
+
+  activeDeploymentKey = state.activeDeploymentKey || null;
+  if (activeDeploymentKey) {
+    loadDeploymentDraft(activeDeploymentKey, restoreFromDraft);
+  } else {
+    restoreFromDraft(null);
+  }
 }
 
 async function verifyAndConnect() {
@@ -1338,20 +1557,23 @@ function onDeployTaggedClick() {
   openPlayerDeployPage(currentTaskContext, dummyVideo, availableStreams, audioItem);
 }
 
-function navigateBackToStreams() {
+async function navigateBackToStreams() {
   if (editingRecordId) {
-    saveCustomRecordWithoutModal();
+    await saveCustomRecordWithoutModal();
     switchView('customRecords');
   } else {
     switchView('taskStreams');
   }
 }
 
-function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null) {
+function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, restoredDraft = undefined) {
   editingRecordId = null;
+  currentTaskId = task.id;
 
   if (customVideoInput) customVideoInput.value = '';
   if (customAudioInput) customAudioInput.value = '';
+  if (inputCustomSubUrl) inputCustomSubUrl.value = '';
+  if (inputCustomSubLang) inputCustomSubLang.value = '';
 
   const { audio, subtitles, video } = processRawStreams(rawUrls, task);
   availableAudios = audio;
@@ -1361,7 +1583,9 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null) {
 
   // Set the selected stream URL and don't change it.
   currentStreamItem = selectedItem;
-  selectedStreamUrl = selectedItem.videoUrl;
+  selectedStreamUrl = selectedItem.videoUrl || selectedItem.audioUrl || '';
+  const preferredAudioUrl = audioItem ? (audioItem.videoUrl || audioItem.audioUrl || '') : '';
+  activeDeploymentKey = getTaskDeploymentKey(task, selectedStreamUrl);
 
   playerPageTitle.textContent = task.title;
   // Update UI with the clicked stream's info
@@ -1395,7 +1619,7 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null) {
   populateQualitySelector(selectedStreamUrl, task);
   
   if (qualitySelector.options.length > 0) {
-    const initialQuality = selectedItem.quality;
+    const initialQuality = String(selectedItem.quality || 'Unknown');
     let matchingIndex = -1;
     for (let i = 0; i < qualitySelector.options.length; i++) {
       if (qualitySelector.options[i].value.toLowerCase().includes(initialQuality.toLowerCase())) {
@@ -1414,26 +1638,27 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null) {
   }
 
   populateAudioSelector();
-  
-  if (audioItem) {
-    audioSelector.value = audioItem.videoUrl || audioItem.audioUrl;
-    selectedAudioUrl = audioSelector.value;
-  } else if (selectedAudioUrl) {
-    audioSelector.value = selectedAudioUrl;
-  }
-
-  // Persist selections to storage in case popup closes
-  chrome.storage.local.set({
-    currentStreamItem: currentStreamItem,
-    selectedStreamUrl: selectedStreamUrl,
-    selectedAudioUrl: selectedAudioUrl
-  });
+  const preferredAudioExists = Array.from(audioSelector.options).some((option) => option.value === preferredAudioUrl);
+  audioSelector.value = preferredAudioExists ? preferredAudioUrl : '';
+  selectedAudioUrl = audioSelector.value;
 
   populateLanguageSelector();
   populateSubtitles();
 
   resetDeployButtonState();
-  switchView('playerDeploy');
+  const deploymentKey = activeDeploymentKey;
+  const finishOpening = (draft) => {
+    if (activeDeploymentKey !== deploymentKey) return;
+    applyDeploymentDraft(draft);
+    switchView('playerDeploy');
+    persistDeploymentDraft();
+  };
+
+  if (restoredDraft !== undefined) {
+    finishOpening(restoredDraft);
+  } else {
+    loadDeploymentDraft(deploymentKey, finishOpening);
+  }
 }
 
 function populateQualitySelector(url, task) {
@@ -1457,7 +1682,7 @@ function populateQualitySelector(url, task) {
 
 function onQualityChange(quality) {
     selectedQuality = quality;
-    // This function no longer needs to update the URL, just the state.
+    persistDeploymentDraft();
 }
 
 function populateAudioSelector() {
@@ -1494,11 +1719,10 @@ function populateAudioSelector() {
 
     if (hasOptions) {
         audioSelectorWrapper.classList.remove('hidden');
-        selectedAudioUrl = audioSelector.value;
     } else {
         audioSelectorWrapper.classList.add('hidden');
-        selectedAudioUrl = null;
     }
+    audioSelector.value = '';
 }
 
 function populateLanguageSelector() {
@@ -1607,7 +1831,7 @@ function triggerStreamDownloads() {
 
 async function deployMetadataPayload() {
   if (editingRecordId) {
-    saveCustomRecordWithoutModal();
+    await saveCustomRecordWithoutModal();
   }
 
   const customVideo = customVideoInput ? customVideoInput.value.trim() : '';
@@ -2026,8 +2250,11 @@ function deleteCustomRecord(id) {
   });
 }
 
-function openCustomRecordInDeployPage(record) {
+function openCustomRecordInDeployPage(record, restoredDraft = undefined) {
   editingRecordId = record.id;
+  currentTaskId = null;
+  currentStreamItem = null;
+  activeDeploymentKey = getCustomRecordDeploymentKey(record.id);
 
   // Setup mock task context
   currentTaskContext = {
@@ -2040,6 +2267,8 @@ function openCustomRecordInDeployPage(record) {
   selectedStreamUrl = record.video_url || '';
   selectedAudioUrl = record.audio_url || '';
   selectedQuality = record.quality || 'Unknown';
+  availableAudios = [];
+  availableVideos = {};
 
   // UI elements
   playerPageTitle.textContent = record.title;
@@ -2051,9 +2280,12 @@ function openCustomRecordInDeployPage(record) {
 
   if (customVideoInput) customVideoInput.value = record.video_url || '';
   if (customAudioInput) customAudioInput.value = record.audio_url || '';
+  if (inputCustomSubUrl) inputCustomSubUrl.value = '';
+  if (inputCustomSubLang) inputCustomSubLang.value = '';
 
   populateLanguageSelector();
   populateQualitySelector(null, null);
+  populateAudioSelector();
 
   if (qualitySelector) {
     // Make sure option exists or add it
@@ -2100,11 +2332,24 @@ function openCustomRecordInDeployPage(record) {
     checkboxes.forEach(cb => cb.checked = true);
   }
 
-  switchView('playerDeploy');
+  resetDeployButtonState();
+  const deploymentKey = activeDeploymentKey;
+  const finishOpening = (draft) => {
+    if (activeDeploymentKey !== deploymentKey) return;
+    applyDeploymentDraft(draft);
+    switchView('playerDeploy');
+    persistDeploymentDraft();
+  };
+
+  if (restoredDraft !== undefined) {
+    finishOpening(restoredDraft);
+  } else {
+    loadDeploymentDraft(deploymentKey, finishOpening);
+  }
 }
 
 function saveCustomRecordWithoutModal() {
-  if (!editingRecordId) return;
+  if (!editingRecordId) return Promise.resolve();
 
   const customVideo = customVideoInput ? customVideoInput.value.trim() : '';
   const customAudio = customAudioInput ? customAudioInput.value.trim() : '';
@@ -2140,10 +2385,15 @@ function saveCustomRecordWithoutModal() {
     }
   }
 
-  chrome.storage.local.get(['custom_records'], (result) => {
-    const records = result.custom_records || [];
-    const idx = records.findIndex(r => r.id === editingRecordId);
-    if (idx !== -1) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['custom_records'], (result) => {
+      const records = result.custom_records || [];
+      const idx = records.findIndex(r => r.id === editingRecordId);
+      if (idx === -1) {
+        resolve();
+        return;
+      }
+
       records[idx].video_url = finalStreamUrl;
       records[idx].audio_url = finalAudioUrl;
       records[idx].quality = selectedQuality || 'Unknown';
@@ -2152,8 +2402,8 @@ function saveCustomRecordWithoutModal() {
       records[idx].season = season;
       records[idx].episode = episode;
 
-      chrome.storage.local.set({ custom_records: records });
-    }
+      chrome.storage.local.set({ custom_records: records }, resolve);
+    });
   });
 }
 
@@ -2171,6 +2421,8 @@ function addCustomSubtitleTrack() {
     return;
   }
 
+  const selectedSubtitleUrls = new Set(getSelectedSubtitleUrls());
+
   // Push new subtitle and re-populate the checklist
   availableSubtitles.push({
     url: url,
@@ -2187,10 +2439,11 @@ function addCustomSubtitleTrack() {
   // Check the newly added item (it should be the last item in subtitles-list)
   if (subtitlesList) {
     const checkboxes = subtitlesList.querySelectorAll('input[type="checkbox"]');
-    if (checkboxes.length > 0) {
-      checkboxes[checkboxes.length - 1].checked = true;
-    }
+    checkboxes.forEach((checkbox, index) => {
+      checkbox.checked = selectedSubtitleUrls.has(checkbox.value) || index === checkboxes.length - 1;
+    });
   }
+  persistDeploymentDraft();
 }
 
 // ==================== CREATE CUSTOM RECORD FLOW ====================
