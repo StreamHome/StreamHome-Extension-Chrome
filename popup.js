@@ -464,13 +464,26 @@ async function verifyAndConnect() {
 }
 
 async function disconnectCredentials() {
-  await removeCookie('serverHostUrl');
-  await removeCookie('serverApiKey');
-  await removeCookie('tmdbApiKey');
+  const credentialDrafts = {
+    draftServerUrl: inputServerUrl.value.trim() || savedServerUrl,
+    draftApiKey: inputApiKey.value.trim() || savedApiKey,
+    draftTmdbApiKey: inputTmdbApiKey.value.trim() || savedTmdbApiKey
+  };
 
-  chrome.storage.local.remove(['apiKey', 'serverUrl', 'tmdbApiKey', 'draftServerUrl', 'draftApiKey', 'draftTmdbApiKey'], () => {
+  await new Promise((resolve) => {
+    chrome.storage.local.set(credentialDrafts, resolve);
+  });
+
+  await Promise.all([
+    removeCookie('serverHostUrl'),
+    removeCookie('serverApiKey'),
+    removeCookie('tmdbApiKey')
+  ]);
+
+  chrome.storage.local.remove(['apiKey', 'serverUrl', 'tmdbApiKey'], () => {
+    savedServerUrl = '';
     savedApiKey = '';
-    inputApiKey.value = '';
+    savedTmdbApiKey = '';
     switchView('auth');
   });
 }
