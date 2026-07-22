@@ -511,24 +511,27 @@ function renderDashboardTasks() {
     const card = document.createElement('div');
     const isActive = (task.id == activeTaskId);
     card.dataset.active = isActive ? 'true' : 'false';
-    const borderCls = isActive ? 'border-emerald-500/50 shadow-lg shadow-emerald-500/5' : 'border-slate-800 hover:border-slate-700/80';
+    const borderCls = isActive ? 'border-orange-500/50' : 'border-slate-800 hover:border-slate-700/80';
 
-    card.className = `bg-[#1E293B] border p-4.5 rounded-xl transition-all duration-200 ${borderCls} flex flex-col gap-2 relative overflow-hidden group cursor-pointer`;
+    card.className = `capture-card bg-[#1E293B] border p-4 rounded-xl transition-all duration-200 ${borderCls} relative overflow-hidden group cursor-pointer`;
     card.innerHTML = `
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="w-9 h-9 rounded-lg ${isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700/60'} flex items-center justify-center flex-shrink-0">
+      <div class="capture-card__row flex items-center justify-between gap-4">
+        <div class="capture-card__main flex items-center gap-3 min-w-0">
+          <div class="capture-card__icon w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" aria-hidden="true">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
             </svg>
           </div>
-          <div class="flex flex-col min-w-0">
-            <span class="font-bold text-sm text-slate-100 truncate max-w-[220px] group-hover:text-cyan-300 transition-colors">${task.title}</span>
-            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">${task.type} ${isActive ? '· Listening now' : ''}</span>
-            <span class="text-[9px] text-slate-500 mt-1 truncate max-w-[250px]">${task.status || 'Ready to capture'}</span>
+          <div class="capture-card__copy flex flex-col min-w-0">
+            <span class="capture-card__title font-bold text-sm text-slate-100 truncate group-hover:text-cyan-300 transition-colors">${task.title}</span>
+            <div class="capture-card__meta flex items-center gap-2">
+              <span class="capture-card__type">${task.type}</span>
+              ${isActive ? '<span class="capture-card__live"><i></i>Listening</span>' : ''}
+            </div>
+            <span class="capture-card__status truncate">${task.status || 'Ready to capture'}</span>
           </div>
         </div>
-        <button class="btn-delete-task text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-850 transition-colors focus:outline-none" aria-label="Delete capture target" title="Delete capture target">
+        <button class="capture-card__delete btn-delete-task text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-850 transition-colors focus:outline-none" aria-label="Delete capture target" title="Delete capture target">
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
           </svg>
@@ -1962,7 +1965,7 @@ function renderCustomRecords(records) {
 
   records.forEach((record) => {
     const card = document.createElement('div');
-    card.className = 'bg-[#1E293B] border border-slate-800 p-4.5 rounded-xl transition-all duration-200 hover:border-slate-700/80 flex flex-col gap-2 relative overflow-hidden group cursor-pointer';
+    card.className = 'bg-[#1E293B] border border-slate-800 p-4 rounded-xl transition-all duration-200 hover:border-slate-700/80 flex flex-col gap-2 relative overflow-hidden group cursor-pointer';
     
     const episodicInfo = record.media_type === 'tv' ? ` · S${record.season} E${record.episode}` : '';
     const videoUrlDisplay = record.video_url || 'No Video Source';
