@@ -63,7 +63,7 @@
       </svg>
       <span id="error-message" class="truncate max-w-[280px]">Error occurred.</span>
     </div>
-    <button id="close-toast" type="button" aria-label="Dismiss error" class="text-rose-200 hover:text-white transition-colors">
+    <button id="close-toast" type="button" aria-label="Dismiss error" class="ember-toast-dismiss">
       <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
       </svg>
@@ -96,7 +96,7 @@
       </div>
     </div>
 
-    <button id="btn-verify-connect" class="w-full bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-bold py-2.5 rounded-lg shadow-lg hover:shadow-cyan-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs">
+    <button id="btn-verify-connect" class="ember-primary w-full py-2.5 flex items-center justify-center gap-2">
       <span>Connect console</span>
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -118,12 +118,12 @@
         </div>
       </div>
       <div class="flex items-center gap-1">
-        <button id="btn-custom-records-nav" type="button" aria-label="Open saved deployments" class="ember-icon-button text-slate-400 hover:text-cyan-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none" title="Saved deployments">
+        <button id="btn-custom-records-nav" type="button" aria-label="Open saved deployments" class="ember-icon-button p-1.5 focus:outline-none" title="Saved deployments">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
           </svg>
         </button>
-        <button id="btn-dashboard-settings" type="button" aria-label="Disconnect from StreamHome" class="ember-icon-button text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none" title="Disconnect">
+        <button id="btn-dashboard-settings" type="button" aria-label="Disconnect from StreamHome" class="ember-icon-button ember-danger-icon p-1.5 focus:outline-none" title="Disconnect">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
           </svg>
@@ -149,7 +149,7 @@
 
     <!-- Floating Create Button -->
     <div class="app-footer p-4 border-t border-slate-850 bg-[#0F172A]/80 backdrop-blur flex justify-end flex-shrink-0">
-      <button id="btn-create-task" type="button" class="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 text-white flex items-center justify-center shadow-lg hover:shadow-cyan-500/20 hover:scale-105 active:scale-[0.95] transition-all focus:outline-none">
+      <button id="btn-create-task" type="button" class="ember-primary w-10 h-10 flex items-center justify-center focus:outline-none">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
@@ -190,8 +190,8 @@
 
     <!-- Create Dialog Footer -->
     <div class="flex gap-3 mt-6">
-      <button id="btn-cancel-task" class="flex-1 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 font-bold py-2 rounded-lg text-xs active:scale-[0.98] transition-all">Cancel</button>
-      <button id="btn-save-task" class="flex-1 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-bold py-2 rounded-lg text-xs shadow-lg hover:shadow-cyan-500/10 active:scale-[0.98] transition-all">Add target</button>
+      <button id="btn-cancel-task" class="ember-secondary flex-1 py-2">Cancel</button>
+      <button id="btn-save-task" class="ember-primary flex-1 py-2">Add target</button>
     </div>
   </div>
 
@@ -199,7 +199,7 @@
   <div id="page-tv-details" class="view-transition view-hidden w-full h-full flex flex-col">
     <!-- Header -->
     <header class="app-header flex items-center gap-3 px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
-      <button id="btn-tv-back" type="button" aria-label="Go back" class="ember-icon-button text-slate-400 hover:text-white hover:bg-slate-800 p-1.5 rounded-lg transition-colors focus:outline-none">
+      <button id="btn-tv-back" type="button" aria-label="Go back" class="ember-icon-button p-1.5 focus:outline-none">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
@@ -221,7 +221,7 @@
   <div id="page-task-streams" class="view-transition view-hidden w-full h-full flex flex-col">
     <!-- Header -->
     <header class="app-header flex items-center gap-3 px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
-      <button id="btn-streams-back" type="button" aria-label="Go back" class="ember-icon-button text-slate-400 hover:text-white hover:bg-slate-800 p-1.5 rounded-lg transition-colors focus:outline-none">
+      <button id="btn-streams-back" type="button" aria-label="Go back" class="ember-icon-button p-1.5 focus:outline-none">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
@@ -230,7 +230,7 @@
         <span id="streams-page-title" class="app-title font-bold text-sm text-white truncate leading-tight">Capture target</span>
         <span id="streams-page-meta" class="app-meta text-[9px] text-slate-500 font-bold mt-0.5 uppercase tracking-wide">Awaiting metadata</span>
       </div>
-      <button id="btn-streams-activate" type="button" class="flex-shrink-0 px-2 py-1 text-[9px] font-bold rounded bg-slate-850 hover:bg-slate-800 text-slate-450 focus:outline-none">Start listening</button>
+      <button id="btn-streams-activate" type="button" class="ember-state-toggle flex-shrink-0 px-2 py-1 focus:outline-none">Start listening</button>
     </header>
 
     <!-- Captured Streams Scroller -->
@@ -240,8 +240,8 @@
 
     <!-- Actions Footer -->
     <footer id="streams-footer" class="app-footer hidden p-4 border-t border-slate-800 bg-[#1E293B]/20 flex gap-2 flex-shrink-0 transition-all">
-      <button id="btn-deploy-tagged" class="flex-1 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-semibold py-2.5 px-3 rounded-lg shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 text-[11px]" title="Deploy Selected Streams">
-        <svg class="w-3.5 h-3.5 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <button id="btn-deploy-tagged" class="ember-primary flex-1 py-2.5 px-3 flex items-center justify-center gap-1.5" title="Deploy Selected Streams">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
@@ -254,7 +254,7 @@
   <div id="page-player-deploy" class="view-transition view-hidden w-full h-full flex flex-col">
     <!-- Header -->
     <header class="app-header flex items-center gap-3 px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
-      <button id="btn-player-back" type="button" aria-label="Go back" class="ember-icon-button text-slate-400 hover:text-white hover:bg-slate-800 p-1.5 rounded-lg transition-colors focus:outline-none">
+      <button id="btn-player-back" type="button" aria-label="Go back" class="ember-icon-button p-1.5 focus:outline-none">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
@@ -329,7 +329,7 @@
           <div class="flex gap-1.5">
             <input type="text" id="input-custom-sub-url" aria-label="Subtitle URL" placeholder="Subtitle URL (.vtt)" class="flex-1 bg-[#1E293B] border border-slate-850 rounded-lg py-1 px-2 text-[10px] text-white focus:outline-none focus:border-cyan-500" />
             <input type="text" id="input-custom-sub-lang" aria-label="Subtitle language" placeholder="Lang" class="w-14 bg-[#1E293B] border border-slate-850 rounded-lg py-1 px-2 text-[10px] text-white focus:outline-none focus:border-cyan-500 text-center" />
-            <button id="btn-add-custom-sub" type="button" aria-label="Add subtitle track" class="bg-cyan-600 hover:bg-cyan-750 text-white font-bold px-2 rounded-lg text-[10px] flex items-center justify-center transition-colors">+</button>
+            <button id="btn-add-custom-sub" type="button" aria-label="Add subtitle track" class="ember-inline-action px-2 flex items-center justify-center">+</button>
           </div>
         </div>
       </div>
@@ -351,21 +351,21 @@
 
     <!-- Actions Footer -->
     <footer class="app-footer p-4 border-t border-slate-800 bg-[#1E293B]/20 flex gap-2 flex-shrink-0">
-      <button id="btn-deploy-server" class="flex-1 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-semibold py-2.5 px-3 rounded-lg shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 text-[11px]" title="Deploy Folder to Server">
-        <svg id="icon-deploy-state" class="w-3.5 h-3.5 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <button id="btn-deploy-server" data-state="idle" class="ember-primary flex-1 py-2.5 px-3 flex items-center justify-center gap-1.5" title="Deploy Folder to Server">
+        <svg id="icon-deploy-state" class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
         </svg>
         <span id="text-deploy-state" class="truncate">Send to StreamHome</span>
       </button>
-      <button id="btn-preview-stream" class="bg-[#1E293B] hover:bg-slate-850 text-white font-semibold py-2.5 px-3 rounded-lg border border-slate-700 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 text-[11px]" title="Preview Stream">
-        <svg class="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <button id="btn-preview-stream" class="ember-secondary py-2.5 px-3 flex items-center justify-center gap-1.5" title="Preview Stream">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         <span class="truncate">Preview</span>
       </button>
-      <button id="btn-download-stream" class="bg-[#1E293B] hover:bg-slate-850 text-white font-semibold py-2.5 px-3 rounded-lg border border-slate-700 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 text-[11px]" title="Download Stream">
-        <svg class="w-3.5 h-3.5 text-slate-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <button id="btn-download-stream" class="ember-secondary py-2.5 px-3 flex items-center justify-center gap-1.5" title="Download Stream">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
         </svg>
         <span class="truncate">Download</span>
@@ -378,7 +378,7 @@
     <!-- Header -->
     <header class="app-header flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
       <div class="flex items-center gap-3 min-w-0">
-        <button id="btn-custom-records-back" type="button" aria-label="Go back" class="ember-icon-button text-slate-400 hover:text-white hover:bg-slate-800 p-1.5 rounded-lg transition-colors focus:outline-none flex-shrink-0">
+        <button id="btn-custom-records-back" type="button" aria-label="Go back" class="ember-icon-button p-1.5 focus:outline-none flex-shrink-0">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
           </svg>
@@ -388,7 +388,7 @@
           <span class="app-meta text-[9px] text-cyan-400 font-bold mt-0.5 uppercase tracking-wide">Reusable source presets</span>
         </div>
       </div>
-      <button id="btn-custom-records-add" type="button" aria-label="Create a saved deployment" class="ember-icon-button text-slate-400 hover:text-cyan-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none flex-shrink-0" title="Create saved deployment">
+      <button id="btn-custom-records-add" type="button" aria-label="Create a saved deployment" class="ember-icon-button p-1.5 focus:outline-none flex-shrink-0" title="Create saved deployment">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
@@ -443,8 +443,8 @@
 
       <!-- Action Buttons -->
       <div class="flex gap-2 mt-2">
-        <button id="btn-modal-create-cancel" class="flex-1 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold py-2 rounded-lg text-xs transition-colors">Cancel</button>
-        <button id="btn-modal-create-save" class="flex-1 bg-gradient-to-r from-purple-500 to-cyan-500 text-white font-bold py-2 rounded-lg text-xs transition-colors">Create</button>
+        <button id="btn-modal-create-cancel" class="ember-secondary flex-1 py-2">Cancel</button>
+        <button id="btn-modal-create-save" class="ember-primary flex-1 py-2">Create</button>
       </div>
     </div>
   </div>

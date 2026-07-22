@@ -750,7 +750,7 @@ function renderDashboardTasks() {
             <span class="capture-card__status truncate">${task.status || 'Ready to capture'}</span>
           </div>
         </div>
-        <button class="capture-card__delete btn-delete-task text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-850 transition-colors focus:outline-none" aria-label="Delete capture target" title="Delete capture target">
+        <button class="capture-card__delete btn-delete-task ember-danger-icon p-1.5 focus:outline-none" aria-label="Delete capture target" title="Delete capture target">
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
           </svg>
@@ -1169,10 +1169,10 @@ function updateStreamsActivateButton(isActive) {
   btnStreamsActivate.dataset.active = isActive ? 'true' : 'false';
   btnStreamsActivate.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   if (isActive) {
-    btnStreamsActivate.className = 'flex-shrink-0 px-2.5 py-1 text-[9px] font-bold rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 focus:outline-none';
+    btnStreamsActivate.className = 'ember-state-toggle flex-shrink-0 px-2.5 py-1 focus:outline-none';
     btnStreamsActivate.textContent = 'Listening';
   } else {
-    btnStreamsActivate.className = 'flex-shrink-0 px-2.5 py-1 text-[9px] font-bold rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-400 hover:text-white focus:outline-none';
+    btnStreamsActivate.className = 'ember-state-toggle flex-shrink-0 px-2.5 py-1 focus:outline-none';
     btnStreamsActivate.textContent = 'Start listening';
   }
 }
@@ -1443,24 +1443,24 @@ function renderGroupedStreams(task, patterns = {}) {
       const isAudioTagged = (task.taggedAudioUrl === targetUrl);
 
       const starSvg = isFavorite 
-        ? `<svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>`
-        : `<svg class="w-3.5 h-3.5 text-slate-500 hover:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.969 0 1.371 1.24.588 1.81l-3.97 2.883a1 1 0 00-.364 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.971-2.883a1 1 0 00-1.18 0l-3.97 2.883c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.364-1.118L2.98 9.42c-.783-.57-.38-1.81.588-1.81h4.906a1 1 0 00.951-.69l1.519-4.674z"/></svg>`;
+        ? `<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>`
+        : `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.969 0 1.371 1.24.588 1.81l-3.97 2.883a1 1 0 00-.364 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.971-2.883a1 1 0 00-1.18 0l-3.97 2.883c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.364-1.118L2.98 9.42c-.783-.57-.38-1.81.588-1.81h4.906a1 1 0 00.951-.69l1.519-4.674z"/></svg>`;
 
       mirrorCard.innerHTML = `
         <div class="flex items-center justify-between mb-1.5">
           <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Mirror Source #${index + 1}</span>
           <div class="flex items-center gap-1">
-            <button class="btn-tag-video p-1 rounded-lg transition-colors focus:outline-none ${isVideoTagged ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:bg-slate-800 hover:text-cyan-400'}" aria-label="${isVideoTagged ? 'Remove video tag' : 'Use as video source'}" title="${isVideoTagged ? 'Remove Video Tag' : 'Set as Video Source'}">
+            <button class="stream-action stream-action--video btn-tag-video ${isVideoTagged ? 'is-active' : ''} focus:outline-none" aria-label="${isVideoTagged ? 'Remove video tag' : 'Use as video source'}" title="${isVideoTagged ? 'Remove Video Tag' : 'Set as Video Source'}">
               <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
             </button>
-            <button class="btn-tag-audio p-1 rounded-lg transition-colors focus:outline-none ${isAudioTagged ? 'bg-purple-500/20 text-purple-400' : 'text-slate-500 hover:bg-slate-800 hover:text-purple-400'}" aria-label="${isAudioTagged ? 'Remove audio tag' : 'Use as audio source'}" title="${isAudioTagged ? 'Remove Audio Tag' : 'Set as Audio Source'}">
+            <button class="stream-action stream-action--audio btn-tag-audio ${isAudioTagged ? 'is-active' : ''} focus:outline-none" aria-label="${isAudioTagged ? 'Remove audio tag' : 'Use as audio source'}" title="${isAudioTagged ? 'Remove Audio Tag' : 'Set as Audio Source'}">
               <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
             </button>
             <div class="w-px h-3 bg-slate-700 mx-0.5"></div>
-            <button class="btn-favorite-stream p-1 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none" aria-label="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}" title="${isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}">
+            <button class="stream-action stream-action--favorite btn-favorite-stream ${isFavorite ? 'is-active' : ''} focus:outline-none" aria-label="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}" title="${isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}">
               ${starSvg}
             </button>
-            <button class="btn-delete-stream p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-rose-400 transition-colors focus:outline-none" aria-label="Delete captured source" title="Delete Captured Record">
+            <button class="stream-action stream-action--danger btn-delete-stream focus:outline-none" aria-label="Delete captured source" title="Delete Captured Record">
               <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
               </svg>
@@ -1758,7 +1758,7 @@ function populateSubtitles() {
             `;
             
             const rightSide = document.createElement('button');
-            rightSide.className = 'text-[9px] font-bold text-cyan-500 hover:text-cyan-300 bg-cyan-950/50 hover:bg-cyan-900/80 px-2 py-0.5 rounded border border-cyan-800/40 transition-colors opacity-80 hover:opacity-100 flex-shrink-0';
+            rightSide.className = 'ember-inline-action text-[9px] font-bold px-2 py-0.5 opacity-80 hover:opacity-100 flex-shrink-0';
             rightSide.textContent = 'Read';
             rightSide.addEventListener('click', (e) => {
               e.preventDefault();
@@ -1789,7 +1789,8 @@ function populateSubtitles() {
 function resetDeployButtonState() {
   if (!btnDeployServer) return;
   btnDeployServer.disabled = false;
-  btnDeployServer.className = 'flex-1 bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-semibold py-2.5 px-4 rounded-lg shadow-lg hover:shadow-cyan-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs';
+  btnDeployServer.dataset.state = 'idle';
+  btnDeployServer.className = 'ember-primary flex-1 py-2.5 px-3 flex items-center justify-center gap-1.5';
   iconDeployState.innerHTML = `
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
   `;
@@ -1842,10 +1843,10 @@ async function deployMetadataPayload() {
 
   if (!finalStreamUrl) { displayError('No video stream has been selected or provided.'); return; }
   btnDeployServer.disabled = true;
-  btnDeployServer.className = 'flex-1 bg-slate-800 border border-slate-700 text-slate-400 font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed text-xs';
+  btnDeployServer.dataset.state = 'loading';
   textDeployState.textContent = 'Connecting...';
   iconDeployState.innerHTML = `
-    <svg class="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+    <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
@@ -1932,7 +1933,7 @@ async function deployMetadataPayload() {
       return;
     }
 
-    btnDeployServer.className = 'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all text-xs';
+    btnDeployServer.dataset.state = 'success';
     textDeployState.textContent = 'Queued in StreamHome';
     iconDeployState.innerHTML = `
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
@@ -2207,7 +2208,7 @@ function renderCustomRecords(records) {
             <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">${record.title}${episodicInfo}</span>
           </div>
         </div>
-        <button class="btn-delete-record text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-850 transition-colors focus:outline-none flex-shrink-0" title="Delete Record">
+        <button class="btn-delete-record ember-danger-icon p-1.5 focus:outline-none flex-shrink-0" title="Delete Record">
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
           </svg>

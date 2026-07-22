@@ -213,6 +213,40 @@ body.ember-ui::after {
   box-shadow: 0 14px 34px rgba(255, 78, 22, 0.24), inset 0 1px rgba(255, 255, 255, 0.34) !important;
 }
 
+.ember-primary svg,
+#btn-verify-connect svg,
+#btn-save-task svg,
+#btn-deploy-tagged svg,
+#btn-deploy-server svg,
+#btn-modal-create-save svg,
+#btn-create-task svg {
+  color: currentColor !important;
+}
+
+.ember-primary:disabled,
+#btn-verify-connect:disabled,
+#btn-save-task:disabled,
+#btn-deploy-tagged:disabled,
+#btn-deploy-server:disabled,
+#btn-modal-create-save:disabled,
+#btn-create-task:disabled {
+  border-color: rgba(255, 181, 156, 0.16) !important;
+  background: rgba(66, 49, 43, 0.72) !important;
+  color: var(--ember-dim) !important;
+  box-shadow: none !important;
+  cursor: wait;
+  opacity: 0.82;
+}
+
+#btn-deploy-server[data-state="success"] {
+  border-color: rgba(130, 229, 166, 0.72) !important;
+  background: linear-gradient(180deg, #9aebba, #65c98b) !important;
+  color: #0b2514 !important;
+  box-shadow: 0 10px 28px rgba(64, 190, 111, 0.2), inset 0 1px rgba(255, 255, 255, 0.34) !important;
+  cursor: default;
+  opacity: 1;
+}
+
 .ember-secondary,
 #btn-cancel-task,
 #btn-modal-create-cancel,
@@ -243,6 +277,13 @@ body.ember-ui::after {
   box-shadow: var(--ember-glow);
 }
 
+.ember-secondary svg,
+#btn-preview-stream svg,
+#btn-download-stream svg,
+#btn-close-tab svg {
+  color: currentColor !important;
+}
+
 .ember-icon-button,
 .ember-ui header > button,
 .ember-ui header button {
@@ -260,6 +301,21 @@ body.ember-ui::after {
   border-color: var(--ember-border) !important;
   background: rgba(255, 95, 31, 0.08) !important;
   color: var(--ember-peach) !important;
+}
+
+.ember-danger-icon {
+  border: 1px solid transparent !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  color: var(--ember-dim) !important;
+}
+
+.ember-danger-icon:hover,
+#btn-dashboard-settings.ember-danger-icon:hover {
+  border-color: rgba(255, 180, 171, 0.28) !important;
+  background: rgba(147, 35, 24, 0.14) !important;
+  color: var(--ember-error) !important;
+  box-shadow: 0 0 16px rgba(147, 35, 24, 0.12);
 }
 
 .ember-ui .custom-scrollbar {
@@ -436,6 +492,16 @@ body.ember-popup {
 #error-toast button {
   min-width: 32px;
   min-height: 32px;
+  border: 1px solid transparent !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  color: var(--ember-error) !important;
+}
+
+#error-toast button:hover {
+  border-color: rgba(255, 180, 171, 0.32) !important;
+  background: rgba(255, 180, 171, 0.09) !important;
+  color: #fff !important;
 }
 
 #tasks-container,
@@ -756,6 +822,56 @@ body.ember-popup {
   box-shadow: inset 2px 0 var(--ember-orange), var(--ember-glow);
 }
 
+#streams-list-container .stream-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  color: var(--ember-dim) !important;
+}
+
+#streams-list-container .stream-action svg {
+  color: currentColor !important;
+}
+
+#streams-list-container .stream-action:hover {
+  border-color: var(--ember-border) !important;
+  background: rgba(255, 95, 31, 0.08) !important;
+  color: var(--ember-peach) !important;
+}
+
+#streams-list-container .stream-action--video.is-active {
+  border-color: rgba(255, 126, 78, 0.58) !important;
+  background: rgba(255, 95, 31, 0.16) !important;
+  color: #ffd4c5 !important;
+  box-shadow: 0 0 14px rgba(255, 95, 31, 0.12);
+}
+
+#streams-list-container .stream-action--audio.is-active {
+  border-color: rgba(255, 181, 156, 0.48) !important;
+  background: rgba(255, 181, 156, 0.11) !important;
+  color: var(--ember-peach-soft) !important;
+  box-shadow: 0 0 14px rgba(255, 181, 156, 0.09);
+}
+
+#streams-list-container .stream-action--favorite.is-active {
+  border-color: rgba(255, 149, 109, 0.5) !important;
+  background: rgba(255, 95, 31, 0.12) !important;
+  color: #ffb889 !important;
+}
+
+#streams-list-container .stream-action--danger:hover {
+  border-color: rgba(255, 180, 171, 0.28) !important;
+  background: rgba(147, 35, 24, 0.14) !important;
+  color: var(--ember-error) !important;
+}
+
 #streams-list-container .text-cyan-300,
 #streams-list-container .text-cyan-400,
 #streams-list-container .text-purple-400,
@@ -812,6 +928,14 @@ body.ember-popup {
   border-radius: 2px !important;
   background: rgba(255, 95, 31, 0.1) !important;
   color: var(--ember-peach) !important;
+}
+
+#subtitles-list button:hover,
+#btn-add-custom-sub:hover {
+  border-color: var(--ember-border-strong) !important;
+  background: rgba(255, 95, 31, 0.2) !important;
+  color: #fff4ef !important;
+  box-shadow: var(--ember-glow);
 }
 
 #subtitles-list input[type="checkbox"] {
