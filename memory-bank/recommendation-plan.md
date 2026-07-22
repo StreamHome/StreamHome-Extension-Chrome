@@ -13,6 +13,7 @@ Create deterministic tests around:
 - episode-scoped stream selection;
 - Season 0 selection;
 - active credential and disconnected-draft transitions.
+- deployment-draft save, restore, and per-context isolation.
 
 ## Priority 2: manifest depth
 

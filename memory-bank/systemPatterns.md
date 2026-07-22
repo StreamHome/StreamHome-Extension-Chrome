@@ -32,10 +32,17 @@ This double-gate pattern is required because a response can finish after the use
 - saved capture tasks and episode-scoped streams;
 - learned source signatures and favorites;
 - custom records and popup view state;
+- `activeDeploymentKey` and per-context `deploymentDraft:{contextKey}` records;
 - active credentials: `serverUrl`, `apiKey`, `tmdbApiKey`;
 - disconnected drafts: `draftServerUrl`, `draftApiKey`, `draftTmdbApiKey`.
 
 Logout first writes drafts, then removes credential cookies and active keys. Drafts populate the form but never count as an authenticated session.
+
+## Deployment drafts
+
+The deployment surface is reconstructed from captured task or saved-record data, then a matching draft is applied. Task context keys include media type, task ID, season, episode, and a stable hash of the selected source. Saved deployments use their record ID. This prevents a quality, language, audio, path, or subtitle choice from bleeding into a different deployment.
+
+Drafts retain the selected quality and audio, language, custom video/audio values, available and checked subtitles, pending subtitle inputs, and season/episode fields. `activeDeploymentKey` lets startup reopen a task draft or saved deployment after the popup closes. When leaving or submitting a saved deployment, its underlying `custom_records` write is awaited before the next action reads it.
 
 ## Preview request headers
 

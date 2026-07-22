@@ -6,6 +6,7 @@ Last verified: 2026-07-22
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `1fb1fd7`: retained deployment-page choices across navigation and popup reopen, isolated by task/episode/source or saved deployment.
 - `7fbc2da`: redesigned popup, player, and subtitle reader around StreamHome's Ember visual system.
 - `a6bcf0a`: preserved server URL, StreamHome access token, and TMDB token as disconnected drafts after logout.
 - `334b617`: repaired capture-task card spacing, sizing, hierarchy, and delete-button alignment.
@@ -19,11 +20,12 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
 - HLS, DASH, direct media, and subtitle requests are detected from network traffic. Chunk/static asset requests and non-success responses are ignored.
 - Series streams are stored per episode so navigating between episodes does not leak streams across episode boundaries.
 - Preview playback supports HLS.js, dash.js, and direct media. Subtitle preview uses the dedicated reader surface.
+- Deployment drafts remember quality, language, audio, custom paths, subtitle additions and selections, pending subtitle fields, and episodic values. The active deployment surface can be restored after the popup closes.
 - Active credentials are mirrored between localhost cookies and `chrome.storage.local`. Logout removes only active credentials and retains their values under draft keys for the next popup session without automatically reconnecting.
 
 ## Validation baseline
 
-The latest frontend changes passed the Tailwind build, JavaScript syntax checks, CSS parsing, DOM ID contract checks, and browser inspection at the real 410 × 600 popup size. The repository does not yet have an automated test suite.
+The latest frontend changes passed the Tailwind build, JavaScript syntax checks, CSS parsing, DOM ID contract checks, browser inspection at the real 410 × 600 popup size, and mocked deployment-draft save/restore checks. The repository does not yet have an automated test suite.
 
 ## Known follow-ups
 

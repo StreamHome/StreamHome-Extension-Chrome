@@ -45,3 +45,7 @@ Capture-card dimensions and hierarchy are defined with supported utilities and t
 ## 11. Version the verified memory snapshot
 
 The directory remains matched by `.gitignore` for incidental local notes. The user explicitly requested the verified project memory to be committed, so these known files are force-added and become normal tracked documentation.
+
+## 12. Store deployment drafts per context
+
+Deployment controls must survive popup closure without leaking choices into another title, episode, source, or saved deployment. Task draft keys include media identity, episode scope, and a stable hash of the selected source; saved deployments use their record ID. Each draft stores the form controls and subtitle state under its own `chrome.storage.local` key, while `activeDeploymentKey` identifies the surface to restore. Saved-deployment writes are awaited before navigation or submission continues.

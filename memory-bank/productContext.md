@@ -21,6 +21,7 @@ StreamHome Capture is a Chrome extension for collecting playable media sources f
 - Make the current capture state unmistakable: idle, listening, processing, ready, error, or deployed.
 - Keep dense technical information readable in the popup's 410 × 600 viewport.
 - Avoid accidental cross-tab and cross-episode capture.
+- Preserve in-progress deployment choices across navigation and popup closure without sharing them with another deployment context.
 - Preserve long credential values after logout without silently reconnecting.
 - Feel like part of StreamHome through the Ember dark-brown and orange visual identity.
 - Support keyboard use and meaningful labels for interactive controls.
