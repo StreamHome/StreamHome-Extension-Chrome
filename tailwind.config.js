@@ -4,7 +4,9 @@ module.exports = {
     "./popup.html",
     "./popup.js",
     "./player.html",
-    "./player.js"
+    "./player.js",
+    "./reader.html",
+    "./reader.js"
   ],
   theme: {
     extend: {},

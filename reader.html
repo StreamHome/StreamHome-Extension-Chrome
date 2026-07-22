@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-[#0F172A]">
+<html lang="en" class="ember-ui h-full bg-[#0F172A]">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,15 +12,16 @@
       border: 1px solid rgba(255, 255, 255, 0.05);
     }
   </style>
+  <link rel="stylesheet" href="ember-ui.css">
 </head>
-<body class="h-full flex flex-col overflow-hidden text-slate-100 font-sans antialiased selection:bg-cyan-500/20 selection:text-cyan-200">
+<body class="ember-ui ember-reader h-full flex flex-col overflow-hidden text-slate-100 font-sans antialiased selection:bg-cyan-500/20 selection:text-cyan-200">
   
-  <header class="px-5 py-4 border-b border-slate-800/80 bg-[#1E293B]/50 flex items-center justify-between flex-shrink-0 dashboard-panel">
+  <header class="app-header px-5 py-4 border-b border-slate-800/80 bg-[#1E293B]/50 flex items-center justify-between flex-shrink-0 dashboard-panel">
     <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center font-extrabold text-[12px] text-white shadow-md shadow-cyan-500/10">TXT</div>
+      <div class="reader-brand w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center font-extrabold text-[12px] text-white shadow-md shadow-cyan-500/10">TXT</div>
       <div class="flex flex-col">
         <h1 id="subtitle-title" class="font-bold text-sm tracking-wide text-white">Loading...</h1>
-        <span class="font-extrabold text-[10px] tracking-wider uppercase text-cyan-400 mt-0.5">Subtitle Reader</span>
+        <span class="ember-eyebrow font-extrabold text-[10px] tracking-wider uppercase text-cyan-400 mt-0.5">Subtitle signal reader</span>
       </div>
     </div>
     <div class="flex items-center gap-3">
@@ -28,19 +29,19 @@
     </div>
   </header>
 
-  <div class="flex-1 overflow-hidden p-4 md:p-6 lg:p-8 flex flex-col max-w-5xl mx-auto w-full">
+  <div class="reader-shell flex-1 overflow-hidden p-4 md:p-6 lg:p-8 flex flex-col max-w-5xl mx-auto w-full">
     <div class="flex items-center justify-between mb-2">
-      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Raw Subtitle Content</span>
+      <span class="reader-meta text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Subtitle payload</span>
       <span id="subtitle-url" class="font-mono text-[9px] text-slate-500 truncate max-w-xs md:max-w-md bg-slate-800/40 px-2 py-1 rounded border border-slate-700/40" title="Source URL"></span>
     </div>
-    <div class="flex-1 bg-[#1E293B]/40 border border-slate-800/60 rounded-xl overflow-hidden flex flex-col">
+    <div class="reader-surface flex-1 bg-[#1E293B]/40 border border-slate-800/60 rounded-xl overflow-hidden flex flex-col">
       <div class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar relative">
         <div id="loading-spinner" class="absolute inset-0 flex flex-col items-center justify-center bg-transparent gap-3 z-10 transition-opacity duration-300">
           <svg class="animate-spin h-8 w-8 text-cyan-400" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fetching Text...</span>
+          <span class="ember-eyebrow text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fetching subtitle…</span>
         </div>
         <pre id="subtitle-content" class="font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap break-words opacity-0 transition-opacity duration-300 relative z-0"></pre>
       </div>

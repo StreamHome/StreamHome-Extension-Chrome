@@ -251,6 +251,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && modalCreateCustomRecord && !modalCreateCustomRecord.classList.contains('hidden')) {
+      closeCreateCustomRecordModal();
+    }
+  });
+
 
   initAutocompleteSearch();
   initCreateRecordSearch();
@@ -419,6 +425,17 @@ function hideToast() {
   if (errorToast) errorToast.classList.add('-translate-y-full');
 }
 
+function makeKeyboardActivatable(element, action, label) {
+  element.tabIndex = 0;
+  element.setAttribute('role', 'button');
+  if (label) element.setAttribute('aria-label', label);
+  element.addEventListener('keydown', (event) => {
+    if (event.target !== element || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    action();
+  });
+}
+
 async function verifyAndConnect() {
   const serverVal = inputServerUrl.value.trim().replace(/\/$/, "");
   const apiVal = inputApiKey.value.trim();
@@ -480,6 +497,7 @@ function renderDashboardTasks() {
   scannedTasks.forEach((task) => {
     const card = document.createElement('div');
     const isActive = (task.id == activeTaskId);
+    card.dataset.active = isActive ? 'true' : 'false';
     const borderCls = isActive ? 'border-emerald-500/50 shadow-lg shadow-emerald-500/5' : 'border-slate-800 hover:border-slate-700/80';
 
     card.className = `bg-[#1E293B] border p-4.5 rounded-xl transition-all duration-200 ${borderCls} flex flex-col gap-2 relative overflow-hidden group cursor-pointer`;
@@ -493,10 +511,11 @@ function renderDashboardTasks() {
           </div>
           <div class="flex flex-col min-w-0">
             <span class="font-bold text-sm text-slate-100 truncate max-w-[220px] group-hover:text-cyan-300 transition-colors">${task.title}</span>
-            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">${task.type} ${isActive ? '· Catching Active' : ''}</span>
+            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">${task.type} ${isActive ? '· Listening now' : ''}</span>
+            <span class="text-[9px] text-slate-500 mt-1 truncate max-w-[250px]">${task.status || 'Ready to capture'}</span>
           </div>
         </div>
-        <button class="btn-delete-task text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-850 transition-colors focus:outline-none" title="Delete Task">
+        <button class="btn-delete-task text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-850 transition-colors focus:outline-none" aria-label="Delete capture target" title="Delete capture target">
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
           </svg>
@@ -504,15 +523,20 @@ function renderDashboardTasks() {
       </div>
     `;
 
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-delete-task')) return;
+    const openTask = () => {
       currentTaskId = task.id;
       if (task.type === 'series') {
         openTvDetailsPage(task);
       } else {
         switchView('taskStreams');
       }
+    };
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-delete-task')) return;
+      openTask();
     });
+    makeKeyboardActivatable(card, openTask, `Open ${task.title} capture target`);
 
     const btnDelete = card.querySelector('.btn-delete-task');
     btnDelete.addEventListener('click', (e) => {
@@ -907,12 +931,14 @@ function loadTaskStreamsPage() {
 
 function updateStreamsActivateButton(isActive) {
   if (!btnStreamsActivate) return;
+  btnStreamsActivate.dataset.active = isActive ? 'true' : 'false';
+  btnStreamsActivate.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   if (isActive) {
     btnStreamsActivate.className = 'flex-shrink-0 px-2.5 py-1 text-[9px] font-bold rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 focus:outline-none';
-    btnStreamsActivate.textContent = 'Active Sniffing';
+    btnStreamsActivate.textContent = 'Listening';
   } else {
     btnStreamsActivate.className = 'flex-shrink-0 px-2.5 py-1 text-[9px] font-bold rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-400 hover:text-white focus:outline-none';
-    btnStreamsActivate.textContent = 'Activate Sniff';
+    btnStreamsActivate.textContent = 'Start listening';
   }
 }
 
@@ -1099,8 +1125,8 @@ function renderGroupedStreams(task, patterns = {}) {
         <svg class="w-8 h-8 text-slate-600 mb-2.5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.5 14h.5v.5a.5.5 0 00.5.5h.5v-.5a.5.5 0 00-.5-.5h-.5V13h.5a.5.5 0 00.5-.5v-.5a.5.5 0 00-.5-.5h-.5v.5a.5.5 0 00.5.5h.5zM2 13h10v2H2z"/>
         </svg>
-        <span class="text-xs font-semibold text-slate-400">Awaiting media streams...</span>
-        <span class="text-[10px] text-slate-500 mt-1 max-w-[220px] leading-relaxed">Make sure "Active Sniffing" is enabled above, then visit the streaming site and play a video.</span>
+        <span class="text-xs font-semibold text-slate-400">No media signals yet</span>
+        <span class="text-[10px] text-slate-500 mt-1 max-w-[240px] leading-relaxed">Select “Start listening”, return to the active browser tab, and begin playback. Captured manifests and media files will appear here.</span>
       </div>
     `;
     return;
@@ -1189,17 +1215,17 @@ function renderGroupedStreams(task, patterns = {}) {
         <div class="flex items-center justify-between mb-1.5">
           <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Mirror Source #${index + 1}</span>
           <div class="flex items-center gap-1">
-            <button class="btn-tag-video p-1 rounded-lg transition-colors focus:outline-none ${isVideoTagged ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:bg-slate-800 hover:text-cyan-400'}" title="${isVideoTagged ? 'Remove Video Tag' : 'Set as Video Source'}">
+            <button class="btn-tag-video p-1 rounded-lg transition-colors focus:outline-none ${isVideoTagged ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:bg-slate-800 hover:text-cyan-400'}" aria-label="${isVideoTagged ? 'Remove video tag' : 'Use as video source'}" title="${isVideoTagged ? 'Remove Video Tag' : 'Set as Video Source'}">
               <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
             </button>
-            <button class="btn-tag-audio p-1 rounded-lg transition-colors focus:outline-none ${isAudioTagged ? 'bg-purple-500/20 text-purple-400' : 'text-slate-500 hover:bg-slate-800 hover:text-purple-400'}" title="${isAudioTagged ? 'Remove Audio Tag' : 'Set as Audio Source'}">
+            <button class="btn-tag-audio p-1 rounded-lg transition-colors focus:outline-none ${isAudioTagged ? 'bg-purple-500/20 text-purple-400' : 'text-slate-500 hover:bg-slate-800 hover:text-purple-400'}" aria-label="${isAudioTagged ? 'Remove audio tag' : 'Use as audio source'}" title="${isAudioTagged ? 'Remove Audio Tag' : 'Set as Audio Source'}">
               <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
             </button>
             <div class="w-px h-3 bg-slate-700 mx-0.5"></div>
-            <button class="btn-favorite-stream p-1 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none" title="${isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}">
+            <button class="btn-favorite-stream p-1 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none" aria-label="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}" title="${isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}">
               ${starSvg}
             </button>
-            <button class="btn-delete-stream p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-rose-400 transition-colors focus:outline-none" title="Delete Captured Record">
+            <button class="btn-delete-stream p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-rose-400 transition-colors focus:outline-none" aria-label="Delete captured source" title="Delete Captured Record">
               <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
               </svg>
@@ -1238,6 +1264,7 @@ function renderGroupedStreams(task, patterns = {}) {
       });
 
       mirrorCard.addEventListener('click', () => { openPlayerDeployPage(task, item, rawUrls); });
+      makeKeyboardActivatable(mirrorCard, () => { openPlayerDeployPage(task, item, rawUrls); }, `Review ${item.label}`);
       contentWrapper.appendChild(mirrorCard);
     });
 
@@ -1526,7 +1553,7 @@ function resetDeployButtonState() {
   iconDeployState.innerHTML = `
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
   `;
-  textDeployState.textContent = 'Deploy Folder';
+  textDeployState.textContent = 'Send to StreamHome';
 }
 
 function onPreviewClick() {
@@ -1666,7 +1693,7 @@ async function deployMetadataPayload() {
     }
 
     btnDeployServer.className = 'flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all text-xs';
-    textDeployState.textContent = 'Injected';
+    textDeployState.textContent = 'Queued in StreamHome';
     iconDeployState.innerHTML = `
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
     `;
@@ -1696,7 +1723,7 @@ function openTvDetailsPage(task) {
   switchView('tvDetails');
   
   if (tvShowTitle) tvShowTitle.textContent = task.title;
-  if (tvShowMeta) tvShowMeta.textContent = 'Select Season';
+  if (tvShowMeta) tvShowMeta.textContent = 'Select season';
   
   if (tvSeasonsContainer) tvSeasonsContainer.classList.remove('hidden');
   if (tvEpisodesContainer) tvEpisodesContainer.classList.add('hidden');
@@ -1750,6 +1777,7 @@ async function renderSeasonsList(task) {
     card.addEventListener('click', () => {
       selectSeason(season);
     });
+    makeKeyboardActivatable(card, () => { selectSeason(season); }, `Open ${season.name || `Season ${season.season_number}`}`);
     tvSeasonsContainer.appendChild(card);
   });
 }
@@ -1813,6 +1841,7 @@ async function selectSeason(season) {
     card.addEventListener('click', () => {
       selectEpisode(season.season_number, episode.episode_number);
     });
+    makeKeyboardActivatable(card, () => { selectEpisode(season.season_number, episode.episode_number); }, `Open episode ${episode.episode_number}: ${episode.name}`);
     tvEpisodesContainer.appendChild(card);
   });
 }
@@ -1837,7 +1866,7 @@ function selectEpisode(seasonNumber, episodeNumber) {
 function onTvBackClick() {
   if (currentSelectedSeason !== null) {
     currentSelectedSeason = null;
-    if (tvShowMeta) tvShowMeta.textContent = 'Select Season';
+    if (tvShowMeta) tvShowMeta.textContent = 'Select season';
     if (tvSeasonsContainer) tvSeasonsContainer.classList.remove('hidden');
     if (tvEpisodesContainer) tvEpisodesContainer.classList.add('hidden');
   } else {
@@ -1959,6 +1988,7 @@ function renderCustomRecords(records) {
       if (e.target.closest('.btn-delete-record')) return;
       openCustomRecordInDeployPage(record);
     });
+    makeKeyboardActivatable(card, () => { openCustomRecordInDeployPage(record); }, `Open saved deployment ${record.name}`);
 
     const btnDel = card.querySelector('.btn-delete-record');
     btnDel.addEventListener('click', (e) => {
@@ -1997,7 +2027,7 @@ function openCustomRecordInDeployPage(record) {
 
   // UI elements
   playerPageTitle.textContent = record.title;
-  playerPageMeta.textContent = `Custom Record: ${record.name}`;
+  playerPageMeta.textContent = `Saved deployment · ${record.name}`;
   displayStreamUrl.textContent = selectedStreamUrl || 'No video source specified yet. Please enter a custom video path/URL below.';
 
   playerMetaTmdb.textContent = record.tmdb_id;
