@@ -1,6 +1,6 @@
 # Progress
 
-Last verified: 2026-07-22
+Last verified: 2026-07-28
 
 ## Completed
 
@@ -34,6 +34,14 @@ Last verified: 2026-07-22
 - Deployment-page choices retained per task/episode/source and saved deployment (`1fb1fd7`).
 - Button colors normalized to semantic Ember roles across popup, player, reader, and dynamic states (`0738f0e`).
 - Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
+
+### Project workflow
+
+- Root `AGENTS.md` with verified architecture, UI, validation, security, and Git
+  guidance.
+- Explicit authorization gate, mandatory planning, atomic commits, push after
+  every commit, and a separately committed and pushed memory-bank update
+  (`f4766fa`).
 
 ## Verification completed
 

@@ -1,6 +1,6 @@
 # Decision Log
 
-Last verified: 2026-07-22
+Last verified: 2026-07-28
 
 ## 1. Ignore media chunks
 
@@ -53,3 +53,12 @@ Deployment controls must survive popup closure without leaking choices into anot
 ## 13. Give buttons semantic Ember roles
 
 Buttons must not carry legacy cyan, purple, slate, emerald, or amber utility colors as their visual contract. Primary, secondary, icon, destructive, inline, toggle, and stream-action roles are defined in `ember-ui.css`; JavaScript changes semantic state through attributes or role classes. Child SVGs inherit `currentColor`, destructive actions use `--ember-error`, listening and stream selections use Ember orange/peach, disabled deployment is muted, and successful deployment uses `--ember-success`.
+
+## 14. Require an authorized, committed, and pushed workflow
+
+Repository actions begin only after a direct user request or clear confirmation.
+Agents must plan before editing, keep changes atomic, commit each logical
+change, and push immediately after every commit. Completed repository work is
+then reflected in the tracked memory bank through a separate commit and push.
+If the scope is missing or ambiguous, the agent asks for permission instead of
+acting.

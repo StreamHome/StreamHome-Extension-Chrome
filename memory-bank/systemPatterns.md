@@ -1,6 +1,6 @@
 # System Patterns
 
-Last verified: 2026-07-22
+Last verified: 2026-07-28
 
 ## Runtime architecture
 
@@ -69,3 +69,12 @@ For frontend changes, the minimum current checks are:
 - check HTML/JavaScript ID contracts and duplicate IDs;
 - inspect popup/player/reader in a browser at their real dimensions;
 - run `git diff --check` before committing.
+
+## Repository workflow
+
+The root `AGENTS.md` is the operational instruction boundary for repository
+work. A direct request or clear approval must exist before action begins.
+Authorized work starts with a maintained plan, preserves unrelated user state,
+and is divided into atomic commits. Every successful commit is pushed
+immediately. After repository changes are complete, the tracked memory bank is
+updated in a separate commit and that commit is pushed as well.

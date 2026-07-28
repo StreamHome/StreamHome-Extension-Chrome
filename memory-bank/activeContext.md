@@ -1,11 +1,13 @@
 # Active Context
 
-Last verified: 2026-07-22
+Last verified: 2026-07-28
 
 ## Current state
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `f4766fa`: required explicit user authorization, planning, atomic commits,
+  immediate pushes, and a separate memory-bank update after repository changes.
 - `0738f0e`: aligned primary, secondary, destructive, inline, toggle, stream-action, loading, and success button colors with the Ember palette.
 - `1fb1fd7`: retained deployment-page choices across navigation and popup reopen, isolated by task/episode/source or saved deployment.
 - `7fbc2da`: redesigned popup, player, and subtitle reader around StreamHome's Ember visual system.
@@ -28,6 +30,11 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
 ## Validation baseline
 
 The latest frontend changes passed the Tailwind build, JavaScript syntax checks, CSS parsing, DOM ID contract checks, browser inspection at the real 410 × 600 popup size, computed button/icon color checks across popup/player/reader, and mocked deployment-draft save/restore checks. The repository does not yet have an automated test suite.
+
+Repository work is governed by the root `AGENTS.md`. Agents must receive clear
+user authorization before acting, maintain a plan, commit each logical change,
+push every commit, and follow implementation work with a separately committed
+and pushed memory-bank update.
 
 ## Known follow-ups
 
