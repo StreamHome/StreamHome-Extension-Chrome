@@ -11,19 +11,30 @@ the StreamHome web application or backend.
 
 ## Required workflow
 
-1. Inspect the relevant implementation, current Git status, and recent history.
-2. Read the applicable files in `memory-bank/`, but verify every claim against
+1. Require explicit user authorization before beginning repository work. A
+   direct request or a clear confirmation such as "proceed", "approved",
+   "okay", "do it", or "make it" grants permission for the normal in-scope
+   steps needed to complete that request. If authorization is absent or the
+   requested scope is unclear, do nothing and ask for permission.
+2. Treat authorization as scoped. Ask again before starting materially
+   different work, expanding the scope, or taking an action the user did not
+   request or reasonably imply.
+3. Inspect the relevant implementation, current Git status, and recent history.
+4. Read the applicable files in `memory-bank/`, but verify every claim against
    the code and Git history. The implementation is the source of truth.
-3. Create or update a concrete plan before modifying files. Keep the plan
+5. Create or update a concrete plan before modifying files. Keep the plan
    current while working.
-4. Make the smallest coherent change that solves the task.
-5. Run checks proportional to the affected behavior.
-6. Review the diff and confirm unrelated user changes are not staged.
-7. Commit every completed logical change before moving to another change. Use a
+6. Make the smallest coherent change that solves the task.
+7. Run checks proportional to the affected behavior.
+8. Review the diff and confirm unrelated user changes are not staged.
+9. Commit every completed logical change before moving to another change. Use a
    concise, descriptive commit message and never combine unrelated work.
-8. Update the tracked memory-bank files when behavior, architecture, decisions,
-   validation status, or known follow-ups materially change. Commit that
-   documentation update separately from the implementation.
+10. Push immediately after every successful commit. If pushing fails, report
+    the failure and resolve it only within the user's authorized scope.
+11. After completing repository changes, update the tracked `memory-bank/`
+    files so they accurately record the resulting behavior, architecture,
+    decisions, validation status, and current follow-ups. Commit the memory-bank
+    update separately, then push that commit as well.
 
 Do not discard, overwrite, stage, or commit pre-existing user changes unless the
 user explicitly places them in scope.
