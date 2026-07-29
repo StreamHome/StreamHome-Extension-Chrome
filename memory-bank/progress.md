@@ -39,6 +39,9 @@ Last verified: 2026-07-29
 - Skip-marker status and manual fallback controls aligned with the shared Ember
   form, inline-primary, destructive, current-color icon, and flat-row contracts
   (`15a5f19`).
+- Subtitle tracks expanded without an inner scrollbar, labeled by normalized
+  language rather than source host, and paired with a semantic Ember custom
+  subtitle editor (`c353d79`).
 - Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
 
 ### Project workflow
@@ -65,6 +68,10 @@ Last verified: 2026-07-29
 - Computed-style and 410 × 600 browser checks for the themed add, remove,
   retry, form-control, empty, ready, and error states with no horizontal
   overflow.
+- Six captured subtitle rows plus one custom Portuguese row rendered at full
+  list height with visible overflow, language-name/code labels, retained
+  selection, cleared custom inputs, accessible Read actions, no horizontal
+  overflow, and no runtime errors.
 
 ## Next candidates
 

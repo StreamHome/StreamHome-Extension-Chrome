@@ -62,6 +62,14 @@ Button color is owned by semantic classes and state attributes in `ember-ui.css`
 
 Critical popup geometry is expressed with valid Tailwind utilities plus explicit component CSS. Dynamic cards provide keyboard activation and accessible names; destructive nested controls stop event propagation.
 
+Subtitle tracks use their normalized language code as the display source of
+truth; source/CDN labels are not shown in the track checklist or reader title.
+Known codes use explicit English names and other valid codes use the browser's
+language display-name support with an uppercase-code fallback. The checklist
+expands with its rows rather than creating a nested scroll region. Custom
+subtitle entry uses semantic Ember fields and a compact primary action while
+preserving deployment-draft persistence and checked-track state.
+
 ## Deployment boundary
 
 The popup combines TMDB metadata, selected captured sources, request headers,

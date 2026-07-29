@@ -6,6 +6,9 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `c353d79`: removed the subtitle list's inner scrollbar, made language the
+  authoritative visible track label, and rebuilt custom subtitle entry with
+  semantic Ember form and action styling.
 - `15a5f19`: aligned the skip-marker lookup and manual fallback controls with
   the shared Ember inline-action, primary-action, destructive-action, form,
   typography, and flat-row presentation contracts.
@@ -31,6 +34,11 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
 - HLS, DASH, direct media, and subtitle requests are detected from network traffic. Chunk/static asset requests and non-success responses are ignored.
 - Series streams are stored per episode so navigating between episodes does not leak streams across episode boundaries.
 - Preview playback supports HLS.js, dash.js, and direct media. Subtitle preview uses the dedicated reader surface.
+- Subtitle tracks expand to their full list height inside the deployment
+  content, display normalized language names and codes instead of source-host
+  labels, and retain checked selections when a custom track is added. The
+  custom subtitle fields use the shared Ember surface, form, and compact
+  primary-action contracts.
 - The deployment surface shows TheIntroDB lookup progress, found marker ranges,
   empty results, and recoverable errors before submission.
 - If TheIntroDB has no markers or its lookup fails, users can add intro, recap,
@@ -55,6 +63,11 @@ The follow-up Ember alignment was checked through computed form/action colors,
 borders, radii, current-color icon behavior, accessible action names, flat
 marker-row geometry, and a second 410 × 600 browser pass with no horizontal
 overflow.
+The subtitle follow-up passed a seven-track 410 × 600 browser scenario:
+the subtitle list had visible overflow with equal client/content heights,
+language labels contained no source text, English remained selected after a
+Portuguese custom track was added and selected, inputs cleared after the add,
+and the page had no horizontal overflow or runtime errors.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
