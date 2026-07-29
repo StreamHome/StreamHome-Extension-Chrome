@@ -1303,8 +1303,13 @@ body.ember-popup {
   color: var(--ember-orange-bright);
 }
 
-.subtitle-track-detection[data-state="detected"] {
+.subtitle-track-detection[data-state="detected"],
+.subtitle-track-detection[data-state="verified"] {
   color: var(--ember-success);
+}
+
+.subtitle-track-detection[data-state="corrected"] {
+  color: var(--ember-orange-bright);
 }
 
 .subtitle-track-detection[data-state="uncertain"],

@@ -526,7 +526,9 @@ function getSerializableSubtitles() {
       languageSource: subtitle.languageSource || 'unknown',
       languageConfidence: Number.isFinite(Number(subtitle.languageConfidence))
         ? Number(subtitle.languageConfidence)
-        : null
+        : null,
+      declaredLanguage: subtitle.declaredLanguage || null,
+      declaredLanguageSource: subtitle.declaredLanguageSource || null
     }));
 }
 
@@ -1859,6 +1861,18 @@ function isUnknownSubtitleLanguage(subtitle) {
     return !language || language === 'unknown' || language === 'und';
 }
 
+function normalizeComparableSubtitleLanguage(language) {
+    const normalized = String(language || '').trim().toLowerCase().replace(/_/g, '-');
+    if (!normalized || normalized === 'unknown' || normalized === 'und') return '';
+    const primaryCode = normalized.split('-')[0];
+    const aliases = { iw: 'he', in: 'id', ji: 'yi' };
+    return aliases[primaryCode] || primaryCode;
+}
+
+function shouldDetectSubtitleLanguage(subtitle) {
+    return Boolean(subtitle) && subtitle.languageSource !== 'detected';
+}
+
 function canDetectSubtitleLanguage(subtitle) {
     try {
       const parsedUrl = new URL(subtitle && subtitle.url);
@@ -1948,21 +1962,58 @@ function selectConfidentSubtitleLanguage(result) {
 function getSubtitleDetectionStatus(subtitle, contextKey = activeDeploymentKey) {
     if (subtitle.languageSource === 'detected') {
       const confidence = Number(subtitle.languageConfidence);
+      const confidenceText = Number.isFinite(confidence) ? ` · ${Math.round(confidence)}%` : '';
+      const detectedLanguage = normalizeComparableSubtitleLanguage(subtitle.lang || subtitle.language);
+      const declaredLanguage = normalizeComparableSubtitleLanguage(subtitle.declaredLanguage);
+
+      if (declaredLanguage && declaredLanguage === detectedLanguage) {
+        return {
+          state: 'verified',
+          text: `Verified from subtitle text${confidenceText}`
+        };
+      }
+
+      if (declaredLanguage && declaredLanguage !== detectedLanguage) {
+        return {
+          state: 'corrected',
+          text: `Corrected from ${getSubtitleLanguageName(subtitle.declaredLanguage)}${confidenceText}`
+        };
+      }
+
       return {
         state: 'detected',
-        text: Number.isFinite(confidence)
-          ? `Detected from subtitle text · ${Math.round(confidence)}%`
-          : 'Detected from subtitle text'
+        text: `Detected from subtitle text${confidenceText}`
       };
     }
 
-    if (!isUnknownSubtitleLanguage(subtitle)) return null;
+    const languageWasUnknown = isUnknownSubtitleLanguage(subtitle);
     const requestKey = getSubtitleDetectionKey(subtitle.url, contextKey);
     const state = subtitle.languageDetectionStatus
       || (subtitleLanguageDetectionRequests.has(requestKey) ? 'detecting' : 'idle');
-    if (state === 'detecting') return { state, text: 'Detecting language from subtitle text…' };
-    if (state === 'uncertain') return { state, text: 'Language could not be detected confidently' };
-    if (state === 'unavailable') return { state, text: 'Subtitle text was unavailable for detection' };
+    if (state === 'detecting') {
+      return {
+        state,
+        text: languageWasUnknown
+          ? 'Detecting language from subtitle text…'
+          : 'Verifying language from subtitle text…'
+      };
+    }
+    if (state === 'uncertain') {
+      return {
+        state,
+        text: languageWasUnknown
+          ? 'Language could not be detected confidently'
+          : 'Language could not be verified confidently'
+      };
+    }
+    if (state === 'unavailable') {
+      return {
+        state,
+        text: languageWasUnknown
+          ? 'Subtitle text was unavailable for detection'
+          : 'Subtitle text was unavailable for verification'
+      };
+    }
     return null;
 }
 
@@ -1972,13 +2023,13 @@ async function detectSubtitleLanguage(subtitleUrl, contextKey) {
 
     const detectionPromise = (async () => {
       const subtitleAtStart = availableSubtitles.find((item) => item && item.url === subtitleUrl);
-      if (!subtitleAtStart || !isUnknownSubtitleLanguage(subtitleAtStart)) return;
+      if (!shouldDetectSubtitleLanguage(subtitleAtStart)) return;
 
       const sampleResponse = await requestSubtitleSample(subtitleAtStart);
       if (activeDeploymentKey !== contextKey) return;
 
       const currentSubtitle = availableSubtitles.find((item) => item && item.url === subtitleUrl);
-      if (!currentSubtitle || !isUnknownSubtitleLanguage(currentSubtitle)) return;
+      if (!shouldDetectSubtitleLanguage(currentSubtitle)) return;
 
       if (!sampleResponse.ok) {
         currentSubtitle.languageDetectionStatus = 'unavailable';
@@ -1997,7 +2048,7 @@ async function detectSubtitleLanguage(subtitleUrl, contextKey) {
       if (activeDeploymentKey !== contextKey) return;
 
       const latestSubtitle = availableSubtitles.find((item) => item && item.url === subtitleUrl);
-      if (!latestSubtitle || !isUnknownSubtitleLanguage(latestSubtitle)) return;
+      if (!shouldDetectSubtitleLanguage(latestSubtitle)) return;
 
       const detectedLanguage = selectConfidentSubtitleLanguage(detectionResult);
       if (!detectedLanguage) {
@@ -2006,6 +2057,13 @@ async function detectSubtitleLanguage(subtitleUrl, contextKey) {
         return;
       }
 
+      const declaredLanguage = latestSubtitle.lang || latestSubtitle.language;
+      if (!isUnknownSubtitleLanguage(latestSubtitle)) {
+        latestSubtitle.declaredLanguage = latestSubtitle.declaredLanguage || declaredLanguage;
+        latestSubtitle.declaredLanguageSource = latestSubtitle.declaredLanguageSource
+          || latestSubtitle.languageSource
+          || 'unknown';
+      }
       latestSubtitle.lang = detectedLanguage.language;
       latestSubtitle.language = detectedLanguage.language;
       latestSubtitle.languageSource = 'detected';
@@ -2033,7 +2091,7 @@ function populateSubtitles(options = {}) {
         subtitlesWrapper.classList.remove('hidden');
         availableSubtitles.forEach((sub, index) => {
             const requestKey = getSubtitleDetectionKey(sub.url, contextKey);
-            if (isUnknownSubtitleLanguage(sub)) {
+            if (shouldDetectSubtitleLanguage(sub)) {
               if (subtitleLanguageDetectionRequests.has(requestKey)
                 && (!sub.languageDetectionStatus || sub.languageDetectionStatus === 'idle' || sub.languageDetectionStatus === 'detecting')) {
                 sub.languageDetectionStatus = 'detecting';
