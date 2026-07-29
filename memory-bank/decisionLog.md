@@ -125,3 +125,14 @@ also placed in memory immediately to close the asynchronous-write race.
 `onResponseStarted` consumes the record and returns before media
 classification. Unmarked no-tab traffic continues through the normal active
 task and tab gates.
+
+## 20. Delete subtitle tracks from their owning context
+
+A subtitle row needs a destructive action separate from selection and preview.
+Deletion first updates the active checklist and deployment draft while
+preserving all other checked tracks. Captured subtitles must also be removed
+from their movie or exact TV episode, together with favorite/tag references,
+captured headers, and quality metadata; using an explicit episode scope avoids
+deleting from whichever episode happens to be active later. Saved deployment
+subtitles are written back immediately. The storage operation is awaited so
+the row cannot reappear after navigation or popup restoration.

@@ -6,6 +6,9 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `25a9fbc`: added a themed Delete action to every deployment subtitle row and
+  persisted removals to task, episode, draft, or saved-record state while
+  preserving unrelated tracks and media.
 - `3905eb8`: kept extension-owned subtitle and manifest fetches marked as
   internal through response correlation, preventing movie-review subtitle
   verification from entering a different movie's active listening task.
@@ -94,6 +97,11 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   the Ember error treatment, disabled, and excluded from selection and
   deployment. A user's later manual deselection is retained across subsequent
   subtitle rerenders and draft persistence.
+  Every subtitle row also exposes an accessible Ember destructive action.
+  Deleting a captured track removes it from the current movie or exact episode,
+  including its favorite/tag, captured-header, and quality references. Manual
+  draft tracks and saved-deployment tracks are removed from their owning
+  context, and other subtitle selections remain unchanged.
   Sampling uses a URL-scoped request-header rule limited to service-worker
   requests, includes source credentials, and falls back from a bounded Range
   request to a bounded full response so URLs that work in the reader are also
@@ -192,6 +200,13 @@ session storage and the in-memory fallback, while an unmarked `tabId: -1`
 service-worker subtitle request still reaches the normal capture gate. A
 delayed session-write scenario also confirmed that the synchronous memory guard
 blocks a fast response and that the late write leaves no stale marker.
+The subtitle-deletion follow-up passed `node --check popup.js`, CSS parsing,
+semantic action and accessible-label source checks, and `git diff --check`.
+Mocked scenarios confirmed movie cleanup, exact-episode cleanup including
+Season 0 scope propagation, deployment-draft rerendering with retained
+unrelated subtitles, and immediate saved-record persistence. The known browser
+policy still blocks local extension `file:` pages, so no visual-browser result
+is claimed for this change.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear

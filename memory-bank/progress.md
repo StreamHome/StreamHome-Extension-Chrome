@@ -66,6 +66,9 @@ Last verified: 2026-07-29
   unavailable, and unsupported tracks persisted and disabled as Broken, with
   manual deselections preserved and broken tracks excluded from deployment
   (`7b3c31b`).
+- Subtitle tracks can be deleted through a semantic Ember destructive action;
+  removals persist to the deployment draft, captured movie or exact episode,
+  and saved deployment records without removing unrelated sources (`25a9fbc`).
 - Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
 
 ### Project workflow
@@ -145,6 +148,12 @@ Last verified: 2026-07-29
   the normal capture gate, and a deliberately delayed session write neither
   leaked the fast internal response nor left a stale marker. Background syntax
   and `git diff --check` passed.
+- Subtitle-deletion checks covered captured movie metadata cleanup, exact TV
+  episode cleanup with unrelated episode preservation, draft rerendering with
+  other subtitles retained, and immediate saved-record persistence. Popup
+  syntax, CSS parsing, semantic/accessibility source checks, and
+  `git diff --check` passed; the local-`file:` browser restriction prevented a
+  claimed visual-browser result.
 
 ## Next candidates
 

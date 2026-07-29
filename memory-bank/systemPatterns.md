@@ -144,6 +144,14 @@ Broken state, and has its checkbox disabled. Broken or disabled tracks are
 excluded defensively from draft selection, saved custom records, and deployment
 payload construction.
 
+Subtitle checklist deletion is context-owned. The popup first removes the URL
+from `availableSubtitles`, rerenders while preserving other checked URLs, and
+persists the deployment draft. For captured tasks it then removes the stream,
+favorite/tag references, captured headers, and quality metadata from the movie
+or explicitly scoped season/episode. For a saved deployment it immediately
+rewrites that custom record. Stream deletion returns a promise so subtitle
+deletion does not report completion before storage persistence finishes.
+
 The one-time default separates automatic policy from user intent. Once a
 compatible track has received its default, later rerenders preserve the
 currently checked URLs without automatically reselecting a track the user
