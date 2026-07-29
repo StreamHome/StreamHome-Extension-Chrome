@@ -24,6 +24,22 @@ let manualSkipMarkers = [];
 
 const DEPLOYMENT_DRAFT_PREFIX = 'deploymentDraft:';
 const SKIP_MARKER_TYPES = ['intro', 'recap', 'credits', 'preview'];
+const LANGUAGE_NAMES = Object.freeze({
+  en: 'English',
+  tr: 'Turkish',
+  de: 'German',
+  es: 'Spanish',
+  fr: 'French',
+  it: 'Italian',
+  ru: 'Russian',
+  ja: 'Japanese',
+  ko: 'Korean',
+  zh: 'Chinese',
+  other: 'Other'
+});
+const SUBTITLE_LANGUAGE_DISPLAY_NAMES = typeof Intl !== 'undefined' && typeof Intl.DisplayNames === 'function'
+  ? new Intl.DisplayNames(['en'], { type: 'language' })
+  : null;
 
 // Create Task search variables
 let selectedTmdbId = null;
@@ -1333,11 +1349,11 @@ function getSubtitleInfo(url) {
         const allNames = [code, ...names];
         const regex = new RegExp(`[\\/_\\.-](${allNames.join('|')})([\\/_\\.-]|\\.|$)`, 'i');
         if (regex.test(lowerUrl)) {
-            return { url, lang: code, label: getMirrorLabel(url) };
+            return { url, lang: code, label: getSubtitleLanguageName(code) };
         }
     }
 
-    return { url, lang: 'unknown', label: getMirrorLabel(url) };
+    return { url, lang: 'unknown', label: getSubtitleLanguageName('unknown') };
 }
 
 // Yeni kategorileri de destekleyen dağıtım motoru
@@ -1792,18 +1808,28 @@ function populateAudioSelector() {
 function populateLanguageSelector() {
     if (!languageSelector) return;
     languageSelector.innerHTML = '';
-    const languages = {
-        'en': 'English', 'tr': 'Turkish', 'de': 'German', 'es': 'Spanish',
-        'fr': 'French', 'it': 'Italian', 'ru': 'Russian', 'ja': 'Japanese',
-        'ko': 'Korean', 'zh': 'Chinese', 'other': 'Other'
-    };
-    Object.entries(languages).forEach(([code, name]) => {
+    Object.entries(LANGUAGE_NAMES).forEach(([code, name]) => {
         const option = document.createElement('option');
         option.value = code;
         option.textContent = name;
         languageSelector.appendChild(option);
     });
     languageSelector.value = 'en';
+}
+
+function getSubtitleLanguageName(language) {
+    const normalized = String(language || '').trim().toLowerCase();
+    if (!normalized || normalized === 'unknown') return 'Unknown language';
+    if (LANGUAGE_NAMES[normalized]) return LANGUAGE_NAMES[normalized];
+    if (SUBTITLE_LANGUAGE_DISPLAY_NAMES) {
+      try {
+        const displayName = SUBTITLE_LANGUAGE_DISPLAY_NAMES.of(normalized);
+        if (displayName && displayName.toLowerCase() !== normalized) return displayName;
+      } catch (error) {
+        // Fall back to the submitted code when Intl does not recognize it.
+      }
+    }
+    return normalized.toUpperCase();
 }
 
 function populateSubtitles() {
@@ -1813,17 +1839,38 @@ function populateSubtitles() {
         subtitlesWrapper.classList.remove('hidden');
         availableSubtitles.forEach((sub, index) => {
             const lang = sub.lang || sub.language || 'en';
+            const languageName = getSubtitleLanguageName(lang);
             const id = `sub-checkbox-${index}`;
             const checkboxWrapper = document.createElement('div');
-            checkboxWrapper.className = 'flex items-center gap-2 bg-slate-900/50 p-2 rounded-md text-xs group';
-            checkboxWrapper.innerHTML = `
-                <input id="${id}" type="checkbox" value="${sub.url}" data-lang="${lang}" class="h-4 w-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-600 focus:ring-offset-slate-800">
-                <label for="${id}" class="text-slate-300 flex-1 truncate cursor-pointer" title="${sub.url}">${sub.label || lang.toUpperCase()} (${lang.toUpperCase()})</label>
-            `;
+            checkboxWrapper.className = 'subtitle-track-row';
+
+            const checkbox = document.createElement('input');
+            checkbox.id = id;
+            checkbox.type = 'checkbox';
+            checkbox.value = sub.url;
+            checkbox.dataset.lang = lang;
+            checkbox.className = 'subtitle-track-checkbox';
+
+            const label = document.createElement('label');
+            label.htmlFor = id;
+            label.className = 'subtitle-track-label';
+            label.title = sub.url;
+
+            const languageText = document.createElement('span');
+            languageText.className = 'subtitle-track-language';
+            languageText.textContent = languageName;
+
+            const languageCode = document.createElement('span');
+            languageCode.className = 'subtitle-track-code';
+            languageCode.textContent = String(lang || 'unknown').toUpperCase();
+
+            label.append(languageText, languageCode);
             
             const rightSide = document.createElement('button');
-            rightSide.className = 'ember-inline-action text-[9px] font-bold px-2 py-0.5 opacity-80 hover:opacity-100 flex-shrink-0';
+            rightSide.type = 'button';
+            rightSide.className = 'ember-inline-action subtitle-track-read';
             rightSide.textContent = 'Read';
+            rightSide.setAttribute('aria-label', `Read ${languageName} subtitles`);
             rightSide.addEventListener('click', (e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -1834,14 +1881,14 @@ function populateSubtitles() {
               
               const readerParams = new URLSearchParams();
               readerParams.set('url', sub.url);
-              readerParams.set('label', sub.label || lang);
+              readerParams.set('label', languageName);
               if (subHeaders.referer) readerParams.set('referer', subHeaders.referer);
               if (subHeaders.origin) readerParams.set('origin', subHeaders.origin);
               if (subHeaders['user-agent']) readerParams.set('useragent', subHeaders['user-agent']);
 
               chrome.tabs.create({ url: `reader.html?${readerParams.toString()}` });
             });
-            checkboxWrapper.appendChild(rightSide);
+            checkboxWrapper.append(checkbox, label, rightSide);
             
             subtitlesList.appendChild(checkboxWrapper);
         });
@@ -2483,7 +2530,7 @@ function addCustomSubtitleTrack() {
   availableSubtitles.push({
     url: url,
     lang: lang,
-    label: lang.toUpperCase()
+    label: getSubtitleLanguageName(lang)
   });
 
   populateSubtitles();
