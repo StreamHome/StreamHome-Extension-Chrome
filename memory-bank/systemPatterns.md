@@ -7,6 +7,8 @@ Last verified: 2026-07-29
 The extension is a Manifest V3 application with four runtime surfaces:
 
 - `background.js`: service-worker capture pipeline, header correlation, manifest inspection, storage serialization, and dynamic request-header rules.
+- `stream-learning.js`: shared structural URL feature extraction, feedback
+  migration, scoring, and legacy-signature compatibility.
 - `popup.html` / `popup.js`: credentials, TMDB selection, tasks, episode state, captured stream review, custom records, and deployment.
 - `player.html` / `player.js`: HLS, DASH, or direct-media preview.
 - `reader.html` / `reader.js`: subtitle fetch and preview.
@@ -30,13 +32,37 @@ This double-gate pattern is required because a response can finish after the use
 
 - active capture identity: task ID and tab ID;
 - saved capture tasks and episode-scoped streams;
-- learned source signatures and favorites;
+- versioned learned stream examples, legacy source signatures, and favorites;
 - custom records and popup view state;
 - `activeDeploymentKey` and per-context `deploymentDraft:{contextKey}` records;
 - active credentials: `serverUrl`, `apiKey`, `tmdbApiKey`;
 - disconnected drafts: `draftServerUrl`, `draftApiKey`, `draftTmdbApiKey`.
 
 Logout first writes drafts, then removes credential cookies and active keys. Drafts populate the form but never count as an authenticated session.
+
+## Stream recommendation learning
+
+`stream-learning.js` is loaded by both the popup and the module service worker
+so recommendation rendering and capture-time auto-tagging use one algorithm.
+Favorite, video-tag, and audio-tag feedback are separate roles. Version 2 stores
+feature examples with occurrence counts; it does not store query values.
+
+Features describe stable source structure: exact and normalized CDN host
+families, path depth, stable directory and filename segments, two- and
+three-segment path tails, terminal and embedded media extensions, and query
+parameter names. Numeric and one-letter CDN shards normalize to a shared
+family, while volatile or high-entropy path segments become wildcards.
+Recommendation scoring favors filename and path-tail agreement. Host-only
+similarity stays below the threshold unless repeated evidence supplies several
+independent matches, preventing one favorite from promoting every resource on
+the same CDN.
+
+Existing task and episode favorites and manual video/audio tags are migrated
+once into the versioned examples. The legacy arrays remain readable: exact
+legacy video/audio signatures preserve their former auto-tag behavior, while a
+host-only legacy favorite is intentionally too weak to recommend a source.
+Adding or removing a favorite/tag increments or decrements only its structural
+example, and learned recommendations are ordered by score.
 
 ## Deployment drafts
 

@@ -6,6 +6,10 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `6a73a11`: replaced unused host-only favorite signatures with a shared,
+  versioned structural URL learner that migrates existing task feedback,
+  recommends related sources, ranks learned matches, and drives background
+  video/audio auto-tagging.
 - `7b3c31b`: made compatible subtitle tracks active by default after successful
   content verification, persisted broken results, disabled broken selections,
   and excluded them from draft selections, saved records, and deployment
@@ -45,6 +49,14 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
 - Buttons use semantic Ember roles rather than legacy cyan/purple/slate utilities. Nested SVGs inherit their button foreground, destructive actions use the Ember error treatment, and deployment loading/success states have explicit visual contracts.
 - Capture is limited to the selected task and the tab that started listening. A second gate runs after asynchronous manifest work to prevent late writes.
 - HLS, DASH, direct media, and subtitle requests are detected from network traffic. Chunk/static asset requests and non-success responses are ignored.
+- Favorites and manual video/audio tags train a shared local recommendation
+  model. It compares stable URL structure such as normalized CDN families,
+  path tails, filenames, embedded media extensions, and query-key names without
+  storing query values. Existing task favorites and tags are migrated once,
+  repeated structural choices increase confidence, and weak host-only favorite
+  history cannot recommend every source from one CDN. Learned favorite/video
+  matches appear in the Recommended Streams group; video/audio matches also
+  retain the existing background auto-tag behavior.
 - Series streams are stored per episode so navigating between episodes does not leak streams across episode boundaries.
 - Preview playback supports HLS.js, dash.js, and direct media. Subtitle preview uses the dedicated reader surface.
 - Subtitle tracks expand to their full list height inside the deployment
@@ -142,6 +154,16 @@ one-time default state, omitted broken URLs from `selectedSubtitleUrls`, and
 retained the manual deselection. The deployment payload contained only the
 seven still-selected compatible tracks. Ten rows retained equal client/content
 heights, visible overflow, no horizontal overflow, and no runtime errors.
+The recommendation-learning change passed syntax checks for
+`stream-learning.js`, `popup.js`, and `background.js`, HTML script-order and
+duplicate-ID checks, and `git diff --check`. Direct scenarios covered the
+reported numbered-CDN `/txt/master.txt` shape, alphabetic CDN shards, stable
+HLS and DASH filenames, unrelated chunk rejection, repeated feedback,
+single-feedback removal, migration from existing task history, and legacy
+video-signature compatibility. Stored examples were also checked not to retain
+query values. A local browser visual check was attempted, but the browser
+security policy rejected the extension's `file:` URL, so no new visual-browser
+result is claimed for this change.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear

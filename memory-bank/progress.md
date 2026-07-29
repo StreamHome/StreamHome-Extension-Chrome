@@ -11,7 +11,10 @@ Last verified: 2026-07-29
 - OPTIONS, unsuccessful response, chunk, and static-resource filtering.
 - Pre- and post-fetch task/tab gates for stale and prefetched requests.
 - Serialized task writes and episode-scoped series streams.
-- Learned source signatures and favorites.
+- Shared v2 structural URL learning for favorites and manual video/audio tags,
+  with task-history migration, repeated-evidence counts, scored recommendation
+  ordering, background auto-tagging, and legacy signature compatibility
+  (`6a73a11`).
 
 ### Metadata and deployment
 
@@ -116,6 +119,14 @@ Last verified: 2026-07-29
   selected URLs excluded broken tracks, the deployment payload contained only
   the seven still-selected compatible tracks, and the ten-row list had no
   nested or horizontal overflow or runtime errors.
+- Recommendation-learning checks confirmed that the reported numbered-CDN
+  `/txt/master.txt` favorite recommends the equivalent source for another
+  title and shard while rejecting an unrelated segment. Additional cases
+  covered alphabetic CDN shards, stable HLS/DASH filenames, task-history
+  migration, repeated counts, one-at-a-time removal, legacy video signatures,
+  script ordering, duplicate IDs, syntax, and query-value exclusion. The
+  browser security policy blocked the local `file:` popup URL, so this change
+  has no claimed visual-browser result.
 
 ## Next candidates
 

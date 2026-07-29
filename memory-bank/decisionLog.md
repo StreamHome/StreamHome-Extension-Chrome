@@ -88,3 +88,17 @@ persisted as Broken, disabled in the checklist, and excluded from draft
 selection, saved records, and deployment payloads. `defaultSelectionApplied`
 ensures the automatic policy runs once; afterward, a user's manual deselection
 remains authoritative across asynchronous rerenders and popup restoration.
+
+## 17. Learn stream choices from structural URL evidence
+
+Exact host-plus-extension signatures do not generalize across CDN shards,
+disguised manifests, or stable paths, and the former favorite signatures were
+never consumed by the recommendation renderer. One shared versioned learner
+now serves popup recommendations and background auto-tagging. It stores
+query-value-free structural examples separately for favorite, video, and audio
+feedback, counts repeated choices, migrates existing task and episode state,
+and retains legacy video/audio behavior. Strong filename or path-tail matches
+can generalize across normalized CDN families; host-only favorite history
+cannot recommend every resource from that provider. Removing a choice reduces
+only that example rather than deleting a rule that may still be supported by
+other tasks.
