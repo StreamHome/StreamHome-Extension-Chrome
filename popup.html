@@ -347,6 +347,20 @@
           </div>
         </div>
       </div>
+
+      <!-- TheIntroDB skip-marker status and details -->
+      <section id="skip-markers-panel" class="deploy-section skip-markers-panel" data-state="idle" aria-labelledby="skip-markers-title" aria-busy="false">
+        <div class="skip-markers-heading">
+          <div>
+            <span id="skip-markers-title" class="skip-markers-title">Skip markers</span>
+            <span id="skip-markers-status" class="skip-markers-status" aria-live="polite">Waiting for media details</span>
+          </div>
+          <button id="btn-retry-skip-markers" type="button" class="ember-inline-action skip-markers-retry" hidden>Retry</button>
+        </div>
+        <div id="skip-markers-list" class="skip-markers-list" aria-live="polite">
+          <p class="skip-markers-message">TheIntroDB will be checked before deployment.</p>
+        </div>
+      </section>
     </div>
 
     <!-- Actions Footer -->

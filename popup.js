@@ -14,6 +14,12 @@ let selectedStreamUrl = null;
 let selectedAudioUrl = null;
 let activeDeploymentKey = null;
 let isRestoringDeploymentDraft = false;
+let currentSkipMarkers = createEmptySkipMarkers();
+let currentSkipMarkerLookupKey = null;
+let currentSkipMarkerLookupStatus = 'idle';
+let currentSkipMarkerLookupPromise = null;
+let skipMarkerRequestSequence = 0;
+let skipMarkerRefreshTimer = null;
 
 const DEPLOYMENT_DRAFT_PREFIX = 'deploymentDraft:';
 
@@ -121,6 +127,7 @@ let btnDeployServer, btnDownloadStream, btnPreviewStream, iconDeployState, textD
 let qualitySelector, languageSelector, audioSelector, audioSelectorWrapper, subtitlesWrapper, subtitlesList;
 let deploySeasonInput, deployEpisodeInput, deployEpisodicInputsWrapper;
 let customVideoInput, customAudioInput;
+let skipMarkersPanel, skipMarkersStatus, skipMarkersList, btnRetrySkipMarkers;
 
 // Custom Records Cached variables
 let btnCustomRecordsNav, pageCustomRecords, customRecordsListContainer, customRecordsEmptyState, btnCustomRecordsBack;
@@ -201,6 +208,10 @@ document.addEventListener('DOMContentLoaded', () => {
   deployEpisodicInputsWrapper = document.getElementById('deploy-episodic-inputs-wrapper');
   customVideoInput = document.getElementById('custom-video-input');
   customAudioInput = document.getElementById('custom-audio-input');
+  skipMarkersPanel = document.getElementById('skip-markers-panel');
+  skipMarkersStatus = document.getElementById('skip-markers-status');
+  skipMarkersList = document.getElementById('skip-markers-list');
+  btnRetrySkipMarkers = document.getElementById('btn-retry-skip-markers');
 
   btnCustomRecordsNav = document.getElementById('btn-custom-records-nav');
   pageCustomRecords = document.getElementById('page-custom-records');
@@ -240,6 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnDownloadStream) btnDownloadStream.addEventListener('click', triggerStreamDownloads);
   if (btnPreviewStream) btnPreviewStream.addEventListener('click', onPreviewClick);
   if (btnDeployServer) btnDeployServer.addEventListener('click', deployMetadataPayload);
+  if (btnRetrySkipMarkers) btnRetrySkipMarkers.addEventListener('click', () => fetchSkipMarkersForDeployment({ force: true }));
   if (btnCustomRecordsNav) btnCustomRecordsNav.addEventListener('click', () => switchView('customRecords'));
   if (btnCustomRecordsBack) btnCustomRecordsBack.addEventListener('click', () => switchView('dashboard'));
 
@@ -257,8 +269,18 @@ document.addEventListener('DOMContentLoaded', () => {
   if (languageSelector) languageSelector.addEventListener('change', persistDeploymentDraft);
   if (customVideoInput) customVideoInput.addEventListener('input', persistDeploymentDraft);
   if (customAudioInput) customAudioInput.addEventListener('input', persistDeploymentDraft);
-  if (deploySeasonInput) deploySeasonInput.addEventListener('input', persistDeploymentDraft);
-  if (deployEpisodeInput) deployEpisodeInput.addEventListener('input', persistDeploymentDraft);
+  if (deploySeasonInput) {
+    deploySeasonInput.addEventListener('input', () => {
+      persistDeploymentDraft();
+      scheduleSkipMarkerRefresh();
+    });
+  }
+  if (deployEpisodeInput) {
+    deployEpisodeInput.addEventListener('input', () => {
+      persistDeploymentDraft();
+      scheduleSkipMarkerRefresh();
+    });
+  }
   if (inputCustomSubUrl) inputCustomSubUrl.addEventListener('input', persistDeploymentDraft);
   if (inputCustomSubLang) inputCustomSubLang.addEventListener('input', persistDeploymentDraft);
   if (subtitlesList) {
@@ -1606,8 +1628,8 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, res
 
   if (task.type === 'series') {
     deployEpisodicInputsWrapper.classList.remove('hidden');
-    deploySeasonInput.value = task.season || '';
-    deployEpisodeInput.value = task.episode || '';
+    deploySeasonInput.value = task.season ?? '';
+    deployEpisodeInput.value = task.episode ?? '';
     deploySeasonInput.disabled = true;
     deployEpisodeInput.disabled = true;
     deploySeasonInput.classList.add('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
@@ -1652,6 +1674,7 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, res
     applyDeploymentDraft(draft);
     switchView('playerDeploy');
     persistDeploymentDraft();
+    fetchSkipMarkersForDeployment({ force: true });
   };
 
   if (restoredDraft !== undefined) {
@@ -1897,24 +1920,9 @@ async function deployMetadataPayload() {
     payload.episode = episode;
   }
   
-  // Fetch skip markers from TheIntroDB
-  let introDbUrl = `https://api.theintrodb.org/v3/media?tmdb_id=${currentTaskContext.id}`;
-  if (currentTaskContext.type === 'series' && typeof payload.season === 'number' && typeof payload.episode === 'number') {
-    introDbUrl += `&season=${payload.season}&episode=${payload.episode}`;
-  }
-  
-  try {
-    const introRes = await fetch(introDbUrl);
-    if (introRes.ok) {
-      const data = await introRes.json();
-      payload.skip_markers = convertSkipMarkers(data);
-    } else {
-      payload.skip_markers = { intro: [], recap: [], credits: [], preview: [] };
-    }
-  } catch (err) {
-    console.error("Failed to fetch skip markers:", err);
-    payload.skip_markers = { intro: [], recap: [], credits: [], preview: [] };
-  }
+  textDeployState.textContent = 'Checking skip markers...';
+  payload.skip_markers = await fetchSkipMarkersForDeployment({ force: currentSkipMarkerLookupStatus === 'error' });
+  textDeployState.textContent = 'Connecting...';
 
   const requestUrl = `${savedServerUrl}/api/add-movie`;
 
@@ -2313,12 +2321,12 @@ function openCustomRecordInDeployPage(record, restoredDraft = undefined) {
     if (deploySeasonInput) {
       deploySeasonInput.disabled = false;
       deploySeasonInput.classList.remove('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
-      deploySeasonInput.value = record.season || '';
+      deploySeasonInput.value = record.season ?? '';
     }
     if (deployEpisodeInput) {
       deployEpisodeInput.disabled = false;
       deployEpisodeInput.classList.remove('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
-      deployEpisodeInput.value = record.episode || '';
+      deployEpisodeInput.value = record.episode ?? '';
     }
   } else {
     if (deployEpisodicInputsWrapper) deployEpisodicInputsWrapper.classList.add('hidden');
@@ -2340,6 +2348,7 @@ function openCustomRecordInDeployPage(record, restoredDraft = undefined) {
     applyDeploymentDraft(draft);
     switchView('playerDeploy');
     persistDeploymentDraft();
+    fetchSkipMarkersForDeployment({ force: true });
   };
 
   if (restoredDraft !== undefined) {
@@ -2617,13 +2626,224 @@ function translateHttpStatus(status) {
   return codes[status] || `HTTP Error (${status}) - An unexpected network response error occurred.`;
 }
 
-function convertSkipMarkers(dbMarkers) {
-  const skip_markers = {
+function createEmptySkipMarkers() {
+  return {
     intro: [],
     recap: [],
     credits: [],
     preview: []
   };
+}
+
+function getSkipMarkerLookupContext() {
+  if (!currentTaskContext) return null;
+
+  const tmdbId = Number.parseInt(currentTaskContext.id, 10);
+  if (!Number.isInteger(tmdbId) || tmdbId <= 0) return null;
+
+  const isSeries = currentTaskContext.type === 'series';
+  let season = null;
+  let episode = null;
+
+  if (isSeries) {
+    season = Number.parseInt(deploySeasonInput ? deploySeasonInput.value : '', 10);
+    episode = Number.parseInt(deployEpisodeInput ? deployEpisodeInput.value : '', 10);
+    if (!Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 0) return null;
+  }
+
+  return {
+    tmdbId,
+    isSeries,
+    season,
+    episode,
+    deploymentKey: activeDeploymentKey,
+    key: `${isSeries ? 'tv' : 'movie'}:${tmdbId}:${isSeries ? season : '-'}:${isSeries ? episode : '-'}`
+  };
+}
+
+function countSkipMarkers(markers) {
+  return ['intro', 'recap', 'credits', 'preview'].reduce((total, type) => {
+    return total + (Array.isArray(markers && markers[type]) ? markers[type].length : 0);
+  }, 0);
+}
+
+function formatSkipMarkerTime(seconds) {
+  const numericSeconds = Number(seconds);
+  if (!Number.isFinite(numericSeconds) || numericSeconds < 0) return 'Unknown';
+
+  const totalSeconds = Math.round(numericSeconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+  }
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
+function formatSkipMarkerRange(marker) {
+  const start = Number(marker && marker.start);
+  const end = Number(marker && marker.end);
+  const startLabel = formatSkipMarkerTime(Number.isFinite(start) ? start : 0);
+
+  if (!Number.isFinite(end) || end <= start) {
+    return `${startLabel} - end of media`;
+  }
+  return `${startLabel} - ${formatSkipMarkerTime(end)}`;
+}
+
+function renderSkipMarkerState(status, markers = createEmptySkipMarkers()) {
+  if (!skipMarkersPanel || !skipMarkersStatus || !skipMarkersList) return;
+
+  const markerCount = countSkipMarkers(markers);
+  const renderedStatus = status === 'ready' && markerCount === 0 ? 'empty' : status;
+  const statusMessages = {
+    idle: 'Waiting for media details',
+    loading: 'Checking TheIntroDB...',
+    ready: `${markerCount} marker${markerCount === 1 ? '' : 's'} found`,
+    empty: 'No markers found',
+    error: 'Lookup unavailable'
+  };
+
+  skipMarkersPanel.dataset.state = renderedStatus;
+  skipMarkersPanel.setAttribute('aria-busy', renderedStatus === 'loading' ? 'true' : 'false');
+  skipMarkersStatus.textContent = statusMessages[renderedStatus] || statusMessages.idle;
+  if (btnRetrySkipMarkers) btnRetrySkipMarkers.hidden = renderedStatus !== 'error';
+  skipMarkersList.replaceChildren();
+
+  if (renderedStatus !== 'ready') {
+    const message = document.createElement('p');
+    message.className = 'skip-markers-message';
+    if (renderedStatus === 'loading') {
+      message.textContent = 'Looking up intro, recap, credits, and preview markers.';
+    } else if (renderedStatus === 'empty') {
+      message.textContent = 'TheIntroDB has no skip markers for this title or episode.';
+    } else if (renderedStatus === 'error') {
+      message.textContent = 'Marker details could not be loaded. Deployment can continue without them, or you can retry.';
+    } else {
+      message.textContent = 'Enter valid media details to check TheIntroDB.';
+    }
+    skipMarkersList.appendChild(message);
+    return;
+  }
+
+  const labels = {
+    intro: 'Intro',
+    recap: 'Recap',
+    credits: 'Credits',
+    preview: 'Preview'
+  };
+
+  Object.entries(labels).forEach(([type, label]) => {
+    const ranges = Array.isArray(markers[type]) ? markers[type] : [];
+    if (ranges.length === 0) return;
+
+    const row = document.createElement('div');
+    row.className = 'skip-marker-row';
+
+    const typeLabel = document.createElement('span');
+    typeLabel.className = 'skip-marker-type';
+    typeLabel.textContent = label;
+
+    const rangeList = document.createElement('span');
+    rangeList.className = 'skip-marker-ranges';
+    rangeList.textContent = ranges.map(formatSkipMarkerRange).join(', ');
+
+    row.append(typeLabel, rangeList);
+    skipMarkersList.appendChild(row);
+  });
+}
+
+function scheduleSkipMarkerRefresh() {
+  if (skipMarkerRefreshTimer) clearTimeout(skipMarkerRefreshTimer);
+  if (activeView !== 'playerDeploy' || !currentTaskContext || currentTaskContext.type !== 'series') return;
+
+  skipMarkerRefreshTimer = setTimeout(() => {
+    skipMarkerRefreshTimer = null;
+    if (activeView === 'playerDeploy') fetchSkipMarkersForDeployment();
+  }, 300);
+}
+
+async function fetchSkipMarkersForDeployment({ force = false } = {}) {
+  const context = getSkipMarkerLookupContext();
+  if (!context) {
+    currentSkipMarkers = createEmptySkipMarkers();
+    currentSkipMarkerLookupKey = null;
+    currentSkipMarkerLookupStatus = 'idle';
+    renderSkipMarkerState('idle', currentSkipMarkers);
+    return currentSkipMarkers;
+  }
+
+  if (!force && currentSkipMarkerLookupKey === context.key) {
+    if (currentSkipMarkerLookupStatus === 'loading' && currentSkipMarkerLookupPromise) {
+      return currentSkipMarkerLookupPromise;
+    }
+    if (currentSkipMarkerLookupStatus === 'ready' || currentSkipMarkerLookupStatus === 'empty') {
+      return currentSkipMarkers;
+    }
+  }
+
+  const requestSequence = ++skipMarkerRequestSequence;
+  currentSkipMarkerLookupKey = context.key;
+  currentSkipMarkerLookupStatus = 'loading';
+  currentSkipMarkers = createEmptySkipMarkers();
+  renderSkipMarkerState('loading', currentSkipMarkers);
+
+  const params = new URLSearchParams({ tmdb_id: String(context.tmdbId) });
+  if (context.isSeries) {
+    params.set('season', String(context.season));
+    params.set('episode', String(context.episode));
+  }
+
+  const requestKeyIsCurrent = () => {
+    const latestContext = getSkipMarkerLookupContext();
+    return requestSequence === skipMarkerRequestSequence
+      && activeView === 'playerDeploy'
+      && activeDeploymentKey === context.deploymentKey
+      && latestContext
+      && latestContext.key === context.key;
+  };
+
+  const lookupPromise = (async () => {
+    try {
+      const response = await fetch(`https://api.theintrodb.org/v3/media?${params.toString()}`);
+      if (response.status === 404) {
+        if (!requestKeyIsCurrent()) return createEmptySkipMarkers();
+
+        currentSkipMarkers = createEmptySkipMarkers();
+        currentSkipMarkerLookupStatus = 'empty';
+        renderSkipMarkerState('empty', currentSkipMarkers);
+        return currentSkipMarkers;
+      }
+      if (!response.ok) throw new Error(`TheIntroDB returned HTTP ${response.status}`);
+
+      const markers = convertSkipMarkers(await response.json());
+      if (!requestKeyIsCurrent()) return createEmptySkipMarkers();
+
+      currentSkipMarkers = markers;
+      currentSkipMarkerLookupStatus = countSkipMarkers(markers) > 0 ? 'ready' : 'empty';
+      renderSkipMarkerState(currentSkipMarkerLookupStatus, markers);
+      return markers;
+    } catch (error) {
+      if (!requestKeyIsCurrent()) return createEmptySkipMarkers();
+
+      console.warn('TheIntroDB skip-marker lookup failed.');
+      currentSkipMarkers = createEmptySkipMarkers();
+      currentSkipMarkerLookupStatus = 'error';
+      renderSkipMarkerState('error', currentSkipMarkers);
+      return currentSkipMarkers;
+    } finally {
+      if (requestSequence === skipMarkerRequestSequence) currentSkipMarkerLookupPromise = null;
+    }
+  })();
+
+  currentSkipMarkerLookupPromise = lookupPromise;
+  return lookupPromise;
+}
+
+function convertSkipMarkers(dbMarkers) {
+  const skip_markers = createEmptySkipMarkers();
 
   const convertArray = (arr) => {
     if (!Array.isArray(arr)) return [];

@@ -900,6 +900,109 @@ body.ember-popup {
   padding: 13px !important;
 }
 
+.skip-markers-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.skip-markers-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.skip-markers-heading > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.skip-markers-title {
+  color: var(--ember-peach-soft);
+  font-family: var(--ember-headline);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.skip-markers-status {
+  color: var(--ember-muted);
+  font-family: var(--ember-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.skip-markers-panel[data-state="loading"] .skip-markers-status {
+  color: var(--ember-orange-bright);
+}
+
+.skip-markers-panel[data-state="ready"] .skip-markers-status {
+  color: var(--ember-success);
+}
+
+.skip-markers-panel[data-state="error"] .skip-markers-status {
+  color: var(--ember-error);
+}
+
+.skip-markers-retry {
+  min-height: 26px;
+  padding: 4px 9px;
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.skip-markers-retry[hidden] {
+  display: none !important;
+}
+
+.skip-markers-list {
+  display: grid;
+  gap: 6px;
+}
+
+.skip-markers-message {
+  margin: 0;
+  color: var(--ember-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.skip-marker-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 95, 31, 0.12);
+}
+
+.skip-marker-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.skip-marker-type {
+  color: var(--ember-peach);
+  font-family: var(--ember-headline);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.skip-marker-ranges {
+  min-width: 0;
+  color: var(--ember-peach-soft);
+  font-family: var(--ember-mono);
+  font-size: 9px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 #display-stream-url,
 #raw-stream-url,
 #header-referer,
