@@ -360,6 +360,36 @@
         <div id="skip-markers-list" class="skip-markers-list" aria-live="polite">
           <p class="skip-markers-message">TheIntroDB will be checked before deployment.</p>
         </div>
+        <div id="manual-skip-markers-editor" class="manual-skip-markers-editor" hidden>
+          <div class="manual-skip-markers-heading">
+            <div>
+              <span class="manual-skip-markers-title">Manual fallback</span>
+              <span id="manual-skip-markers-hint" class="manual-skip-markers-hint">Enter start and end as HH:MM:SS.</span>
+            </div>
+          </div>
+          <div class="manual-skip-marker-fields">
+            <label for="manual-skip-marker-type">
+              <span>Marker</span>
+              <select id="manual-skip-marker-type">
+                <option value="intro">Intro</option>
+                <option value="recap">Recap</option>
+                <option value="credits">Credits</option>
+                <option value="preview">Preview</option>
+              </select>
+            </label>
+            <label for="manual-skip-marker-start">
+              <span>Start</span>
+              <input id="manual-skip-marker-start" type="text" inputmode="numeric" autocomplete="off" placeholder="00:00:00" aria-describedby="manual-skip-markers-hint manual-skip-markers-error" />
+            </label>
+            <label for="manual-skip-marker-end">
+              <span>End</span>
+              <input id="manual-skip-marker-end" type="text" inputmode="numeric" autocomplete="off" placeholder="00:00:00" aria-describedby="manual-skip-markers-hint manual-skip-markers-error" />
+            </label>
+          </div>
+          <button id="btn-add-manual-skip-marker" type="button" class="ember-inline-action manual-skip-marker-add">Add marker</button>
+          <p id="manual-skip-markers-error" class="manual-skip-markers-error" role="alert" hidden></p>
+          <div id="manual-skip-markers-list" class="manual-skip-markers-list"></div>
+        </div>
       </section>
     </div>
 

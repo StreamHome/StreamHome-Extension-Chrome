@@ -20,8 +20,10 @@ let currentSkipMarkerLookupStatus = 'idle';
 let currentSkipMarkerLookupPromise = null;
 let skipMarkerRequestSequence = 0;
 let skipMarkerRefreshTimer = null;
+let manualSkipMarkers = [];
 
 const DEPLOYMENT_DRAFT_PREFIX = 'deploymentDraft:';
+const SKIP_MARKER_TYPES = ['intro', 'recap', 'credits', 'preview'];
 
 // Create Task search variables
 let selectedTmdbId = null;
@@ -128,6 +130,8 @@ let qualitySelector, languageSelector, audioSelector, audioSelectorWrapper, subt
 let deploySeasonInput, deployEpisodeInput, deployEpisodicInputsWrapper;
 let customVideoInput, customAudioInput;
 let skipMarkersPanel, skipMarkersStatus, skipMarkersList, btnRetrySkipMarkers;
+let manualSkipMarkersEditor, manualSkipMarkerType, manualSkipMarkerStart, manualSkipMarkerEnd;
+let btnAddManualSkipMarker, manualSkipMarkersHint, manualSkipMarkersError, manualSkipMarkersList;
 
 // Custom Records Cached variables
 let btnCustomRecordsNav, pageCustomRecords, customRecordsListContainer, customRecordsEmptyState, btnCustomRecordsBack;
@@ -212,6 +216,14 @@ document.addEventListener('DOMContentLoaded', () => {
   skipMarkersStatus = document.getElementById('skip-markers-status');
   skipMarkersList = document.getElementById('skip-markers-list');
   btnRetrySkipMarkers = document.getElementById('btn-retry-skip-markers');
+  manualSkipMarkersEditor = document.getElementById('manual-skip-markers-editor');
+  manualSkipMarkerType = document.getElementById('manual-skip-marker-type');
+  manualSkipMarkerStart = document.getElementById('manual-skip-marker-start');
+  manualSkipMarkerEnd = document.getElementById('manual-skip-marker-end');
+  btnAddManualSkipMarker = document.getElementById('btn-add-manual-skip-marker');
+  manualSkipMarkersHint = document.getElementById('manual-skip-markers-hint');
+  manualSkipMarkersError = document.getElementById('manual-skip-markers-error');
+  manualSkipMarkersList = document.getElementById('manual-skip-markers-list');
 
   btnCustomRecordsNav = document.getElementById('btn-custom-records-nav');
   pageCustomRecords = document.getElementById('page-custom-records');
@@ -252,6 +264,22 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnPreviewStream) btnPreviewStream.addEventListener('click', onPreviewClick);
   if (btnDeployServer) btnDeployServer.addEventListener('click', deployMetadataPayload);
   if (btnRetrySkipMarkers) btnRetrySkipMarkers.addEventListener('click', () => fetchSkipMarkersForDeployment({ force: true }));
+  if (btnAddManualSkipMarker) btnAddManualSkipMarker.addEventListener('click', addManualSkipMarker);
+  if (manualSkipMarkerEnd) {
+    manualSkipMarkerEnd.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      addManualSkipMarker();
+    });
+  }
+  [manualSkipMarkerType, manualSkipMarkerStart, manualSkipMarkerEnd].forEach((control) => {
+    if (!control) return;
+    const eventName = control === manualSkipMarkerType ? 'change' : 'input';
+    control.addEventListener(eventName, () => {
+      clearManualSkipMarkerError();
+      persistDeploymentDraft();
+    });
+  });
   if (btnCustomRecordsNav) btnCustomRecordsNav.addEventListener('click', () => switchView('customRecords'));
   if (btnCustomRecordsBack) btnCustomRecordsBack.addEventListener('click', () => switchView('dashboard'));
 
@@ -485,7 +513,7 @@ function collectDeploymentDraft() {
   const quality = qualitySelector ? qualitySelector.value : selectedQuality;
 
   return {
-    version: 1,
+    version: 2,
     kind: editingRecordId ? 'customRecord' : 'task',
     contextKey: activeDeploymentKey,
     taskId: editingRecordId ? null : (currentTaskId ?? currentTaskContext.id),
@@ -503,6 +531,10 @@ function collectDeploymentDraft() {
     pendingSubtitleLanguage: inputCustomSubLang ? inputCustomSubLang.value : '',
     season: deploySeasonInput ? deploySeasonInput.value : '',
     episode: deployEpisodeInput ? deployEpisodeInput.value : '',
+    manualSkipMarkers: getSerializableManualSkipMarkers(),
+    pendingManualSkipMarkerType: manualSkipMarkerType ? manualSkipMarkerType.value : 'intro',
+    pendingManualSkipMarkerStart: manualSkipMarkerStart ? manualSkipMarkerStart.value : '',
+    pendingManualSkipMarkerEnd: manualSkipMarkerEnd ? manualSkipMarkerEnd.value : '',
     updatedAt: Date.now()
   };
 }
@@ -582,6 +614,14 @@ function applyDeploymentDraft(draft) {
     if (Object.prototype.hasOwnProperty.call(draft, 'episode') && deployEpisodeInput) {
       deployEpisodeInput.value = draft.episode ?? '';
     }
+    manualSkipMarkers = normalizeManualSkipMarkers(draft.manualSkipMarkers);
+    if (manualSkipMarkerType) {
+      manualSkipMarkerType.value = SKIP_MARKER_TYPES.includes(draft.pendingManualSkipMarkerType)
+        ? draft.pendingManualSkipMarkerType
+        : 'intro';
+    }
+    if (manualSkipMarkerStart) manualSkipMarkerStart.value = draft.pendingManualSkipMarkerStart || '';
+    if (manualSkipMarkerEnd) manualSkipMarkerEnd.value = draft.pendingManualSkipMarkerEnd || '';
 
     const subtitlesByUrl = new Map();
     [...(availableSubtitles || []), ...(draft.availableSubtitles || [])].forEach((subtitle) => {
@@ -1591,6 +1631,7 @@ async function navigateBackToStreams() {
 function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, restoredDraft = undefined) {
   editingRecordId = null;
   currentTaskId = task.id;
+  resetManualSkipMarkerEditor();
 
   if (customVideoInput) customVideoInput.value = '';
   if (customAudioInput) customAudioInput.value = '';
@@ -1865,6 +1906,7 @@ async function deployMetadataPayload() {
   selectedAudioUrl = customAudio || audioSelector.value;
 
   if (!finalStreamUrl) { displayError('No video stream has been selected or provided.'); return; }
+  if (shouldOfferManualSkipMarkers() && hasPendingManualSkipMarker() && !addManualSkipMarker()) return;
   btnDeployServer.disabled = true;
   btnDeployServer.dataset.state = 'loading';
   textDeployState.textContent = 'Connecting...';
@@ -1919,9 +1961,12 @@ async function deployMetadataPayload() {
     payload.season = season;
     payload.episode = episode;
   }
-  
+
   textDeployState.textContent = 'Checking skip markers...';
-  payload.skip_markers = await fetchSkipMarkersForDeployment({ force: currentSkipMarkerLookupStatus === 'error' });
+  const tidbSkipMarkers = await fetchSkipMarkersForDeployment({ force: currentSkipMarkerLookupStatus === 'error' });
+  payload.skip_markers = countSkipMarkers(tidbSkipMarkers) > 0
+    ? tidbSkipMarkers
+    : convertManualSkipMarkersForPayload();
   textDeployState.textContent = 'Connecting...';
 
   const requestUrl = `${savedServerUrl}/api/add-movie`;
@@ -2264,6 +2309,7 @@ function openCustomRecordInDeployPage(record, restoredDraft = undefined) {
   currentTaskId = null;
   currentStreamItem = null;
   activeDeploymentKey = getCustomRecordDeploymentKey(record.id);
+  resetManualSkipMarkerEditor();
 
   // Setup mock task context
   currentTaskContext = {
@@ -2635,6 +2681,197 @@ function createEmptySkipMarkers() {
   };
 }
 
+function normalizeManualSkipMarkers(markers) {
+  if (!Array.isArray(markers)) return [];
+
+  return markers
+    .map((marker) => ({
+      type: marker && SKIP_MARKER_TYPES.includes(marker.type) ? marker.type : null,
+      start_ms: Number(marker && marker.start_ms),
+      end_ms: Number(marker && marker.end_ms)
+    }))
+    .filter((marker) => marker.type
+      && Number.isFinite(marker.start_ms)
+      && marker.start_ms >= 0
+      && Number.isFinite(marker.end_ms)
+      && marker.end_ms > marker.start_ms)
+    .sort((left, right) => left.start_ms - right.start_ms || left.type.localeCompare(right.type));
+}
+
+function resetManualSkipMarkerEditor() {
+  manualSkipMarkers = [];
+  if (manualSkipMarkerType) manualSkipMarkerType.value = 'intro';
+  if (manualSkipMarkerStart) manualSkipMarkerStart.value = '';
+  if (manualSkipMarkerEnd) manualSkipMarkerEnd.value = '';
+  if (manualSkipMarkersEditor) manualSkipMarkersEditor.hidden = true;
+  clearManualSkipMarkerError();
+}
+
+function getSerializableManualSkipMarkers() {
+  return normalizeManualSkipMarkers(manualSkipMarkers).map((marker) => ({
+    type: marker.type,
+    start_ms: marker.start_ms,
+    end_ms: marker.end_ms
+  }));
+}
+
+function parseSkipMarkerClock(value) {
+  const match = /^(\d{1,3}):([0-5]\d):([0-5]\d)$/.exec(String(value || '').trim());
+  if (!match) return null;
+
+  const hours = Number.parseInt(match[1], 10);
+  const minutes = Number.parseInt(match[2], 10);
+  const seconds = Number.parseInt(match[3], 10);
+  return ((hours * 60 * 60) + (minutes * 60) + seconds) * 1000;
+}
+
+function formatSkipMarkerMilliseconds(milliseconds) {
+  const totalSeconds = Math.round(Number(milliseconds) / 1000);
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '00:00:00';
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function clearManualSkipMarkerError() {
+  if (!manualSkipMarkersError) return;
+  manualSkipMarkersError.textContent = '';
+  manualSkipMarkersError.hidden = true;
+}
+
+function showManualSkipMarkerError(message) {
+  if (!manualSkipMarkersError) {
+    displayError(message);
+    return;
+  }
+  manualSkipMarkersError.textContent = message;
+  manualSkipMarkersError.hidden = false;
+}
+
+function hasPendingManualSkipMarker() {
+  return Boolean(
+    (manualSkipMarkerStart && manualSkipMarkerStart.value.trim())
+    || (manualSkipMarkerEnd && manualSkipMarkerEnd.value.trim())
+  );
+}
+
+function shouldOfferManualSkipMarkers() {
+  return Boolean(manualSkipMarkersEditor && !manualSkipMarkersEditor.hidden);
+}
+
+function addManualSkipMarker() {
+  const type = manualSkipMarkerType ? manualSkipMarkerType.value : '';
+  const startMs = parseSkipMarkerClock(manualSkipMarkerStart ? manualSkipMarkerStart.value : '');
+  const endMs = parseSkipMarkerClock(manualSkipMarkerEnd ? manualSkipMarkerEnd.value : '');
+
+  clearManualSkipMarkerError();
+
+  if (!SKIP_MARKER_TYPES.includes(type)) {
+    showManualSkipMarkerError('Select a valid marker type.');
+    return false;
+  }
+  if (startMs === null || endMs === null) {
+    showManualSkipMarkerError('Use HH:MM:SS for both start and end.');
+    return false;
+  }
+  if (endMs <= startMs) {
+    showManualSkipMarkerError('End time must be later than start time.');
+    return false;
+  }
+
+  const duplicate = manualSkipMarkers.some((marker) => (
+    marker.type === type && marker.start_ms === startMs && marker.end_ms === endMs
+  ));
+  if (duplicate) {
+    showManualSkipMarkerError('That marker is already in the manual fallback.');
+    return false;
+  }
+
+  manualSkipMarkers.push({ type, start_ms: startMs, end_ms: endMs });
+  manualSkipMarkers = normalizeManualSkipMarkers(manualSkipMarkers);
+  if (manualSkipMarkerStart) manualSkipMarkerStart.value = '';
+  if (manualSkipMarkerEnd) manualSkipMarkerEnd.value = '';
+  renderManualSkipMarkerEditor(currentSkipMarkerLookupStatus);
+  persistDeploymentDraft();
+  return true;
+}
+
+function removeManualSkipMarker(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= manualSkipMarkers.length) return;
+  manualSkipMarkers.splice(index, 1);
+  renderManualSkipMarkerEditor(currentSkipMarkerLookupStatus);
+  persistDeploymentDraft();
+}
+
+function renderManualSkipMarkerEditor(status) {
+  if (!manualSkipMarkersEditor || !manualSkipMarkersList) return;
+
+  const canUseManualFallback = status === 'empty' || status === 'error';
+  const shouldShow = canUseManualFallback || manualSkipMarkers.length > 0;
+  manualSkipMarkersEditor.hidden = !shouldShow;
+  if (!shouldShow) return;
+
+  if (manualSkipMarkersHint) {
+    manualSkipMarkersHint.textContent = canUseManualFallback
+      ? 'Enter start and end as HH:MM:SS. Values are stored internally in milliseconds.'
+      : 'TheIntroDB markers are active. This saved manual fallback is not being sent.';
+  }
+
+  [manualSkipMarkerType, manualSkipMarkerStart, manualSkipMarkerEnd, btnAddManualSkipMarker].forEach((control) => {
+    if (control) control.disabled = !canUseManualFallback;
+  });
+  if (!canUseManualFallback) clearManualSkipMarkerError();
+
+  manualSkipMarkersList.replaceChildren();
+  if (manualSkipMarkers.length === 0) {
+    const emptyMessage = document.createElement('p');
+    emptyMessage.className = 'manual-skip-markers-empty';
+    emptyMessage.textContent = 'No manual markers added.';
+    manualSkipMarkersList.appendChild(emptyMessage);
+    return;
+  }
+
+  manualSkipMarkers.forEach((marker, index) => {
+    const row = document.createElement('div');
+    row.className = 'manual-skip-marker-row';
+
+    const details = document.createElement('div');
+    details.className = 'manual-skip-marker-details';
+
+    const typeLabel = document.createElement('span');
+    typeLabel.className = 'manual-skip-marker-type';
+    typeLabel.textContent = marker.type;
+
+    const range = document.createElement('span');
+    range.className = 'manual-skip-marker-range';
+    range.textContent = `${formatSkipMarkerMilliseconds(marker.start_ms)} - ${formatSkipMarkerMilliseconds(marker.end_ms)}`;
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'ember-inline-action manual-skip-marker-remove';
+    removeButton.textContent = 'Remove';
+    removeButton.setAttribute('aria-label', `Remove ${marker.type} marker ${range.textContent}`);
+    removeButton.addEventListener('click', () => removeManualSkipMarker(index));
+
+    details.append(typeLabel, range);
+    row.append(details, removeButton);
+    manualSkipMarkersList.appendChild(row);
+  });
+}
+
+function convertManualSkipMarkersForPayload() {
+  const groupedMarkers = createEmptySkipMarkers();
+  normalizeManualSkipMarkers(manualSkipMarkers).forEach((marker) => {
+    groupedMarkers[marker.type].push({
+      start_ms: marker.start_ms,
+      end_ms: marker.end_ms
+    });
+  });
+  return convertSkipMarkers(groupedMarkers);
+}
+
 function getSkipMarkerLookupContext() {
   if (!currentTaskContext) return null;
 
@@ -2662,7 +2899,7 @@ function getSkipMarkerLookupContext() {
 }
 
 function countSkipMarkers(markers) {
-  return ['intro', 'recap', 'credits', 'preview'].reduce((total, type) => {
+  return SKIP_MARKER_TYPES.reduce((total, type) => {
     return total + (Array.isArray(markers && markers[type]) ? markers[type].length : 0);
   }, 0);
 }
@@ -2718,13 +2955,14 @@ function renderSkipMarkerState(status, markers = createEmptySkipMarkers()) {
     if (renderedStatus === 'loading') {
       message.textContent = 'Looking up intro, recap, credits, and preview markers.';
     } else if (renderedStatus === 'empty') {
-      message.textContent = 'TheIntroDB has no skip markers for this title or episode.';
+      message.textContent = 'TheIntroDB has no skip markers for this title or episode. Add a manual fallback below.';
     } else if (renderedStatus === 'error') {
-      message.textContent = 'Marker details could not be loaded. Deployment can continue without them, or you can retry.';
+      message.textContent = 'Marker details could not be loaded. Retry, or add a manual fallback below.';
     } else {
       message.textContent = 'Enter valid media details to check TheIntroDB.';
     }
     skipMarkersList.appendChild(message);
+    renderManualSkipMarkerEditor(renderedStatus);
     return;
   }
 
@@ -2753,6 +2991,7 @@ function renderSkipMarkerState(status, markers = createEmptySkipMarkers()) {
     row.append(typeLabel, rangeList);
     skipMarkersList.appendChild(row);
   });
+  renderManualSkipMarkerEditor(renderedStatus);
 }
 
 function scheduleSkipMarkerRefresh() {
