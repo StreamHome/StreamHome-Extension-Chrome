@@ -1,6 +1,6 @@
 # Decision Log
 
-Last verified: 2026-07-28
+Last verified: 2026-07-29
 
 ## 1. Ignore media chunks
 
@@ -62,3 +62,14 @@ change, and push immediately after every commit. Completed repository work is
 then reflected in the tracked memory bank through a separate commit and push.
 If the scope is missing or ambiguous, the agent asks for permission instead of
 acting.
+
+## 15. Detect only unknown subtitle languages from bounded content
+
+Languages supplied manually or inferred from a subtitle URL remain
+authoritative. For Unknown HTTP(S) tracks, the background worker fetches a
+bounded 128 KiB sample with a timeout and can reuse captured source headers.
+The popup strips subtitle formatting and uses Chrome's native language
+detector. It accepts only sufficiently long, confident results, scopes async
+completion to the active deployment, and otherwise leaves the language
+Unknown with an explicit reason. A successful detection changes language
+metadata only; the original track label and URL are preserved.

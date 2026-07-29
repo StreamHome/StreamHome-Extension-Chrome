@@ -70,6 +70,24 @@ expands with its rows rather than creating a nested scroll region. Custom
 subtitle entry uses semantic Ember fields and a compact primary action while
 preserving deployment-draft persistence and checked-track state.
 
+URL-derived and manually assigned subtitle languages are authoritative and are
+not re-detected. For an Unknown HTTP(S) track, the popup asks the background
+service worker for at most 128 KiB of subtitle text. The fetch can reuse the
+captured Referer, Origin, User-Agent, Cookie, and Authorization headers, uses a
+seven-second timeout, and rejects unsupported URL schemes. The popup removes
+cue timing, indices, markup, and format metadata before passing dialogue text
+to `chrome.i18n.detectLanguage`.
+
+A result is accepted only when the sample has at least 80 dialogue characters
+and the leading language reaches 50% for a reliable detector result or 85% for
+an unreliable result. Otherwise the track remains Unknown. Async completion is
+guarded by `activeDeploymentKey`, so a result cannot update a different
+deployment surface. Successful results persist `languageSource: "detected"`
+and `languageConfidence`, preserve the track's original label and URL, retain
+checked state across rerender, and flow through the existing deployment
+payload. Detecting, detected, uncertain, and unavailable states use semantic
+Ember status styling.
+
 ## Deployment boundary
 
 The popup combines TMDB metadata, selected captured sources, request headers,

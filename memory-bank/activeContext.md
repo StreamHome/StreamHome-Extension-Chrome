@@ -6,6 +6,9 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `f30fac1`: added content-based language detection for unknown subtitle
+  tracks, with bounded authenticated sampling, confidence thresholds, explicit
+  Ember status text, draft persistence, and deployment payload integration.
 - `c353d79`: removed the subtitle list's inner scrollbar, made language the
   authoritative visible track label, and rebuilt custom subtitle entry with
   semantic Ember form and action styling.
@@ -39,6 +42,12 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   labels, and retain checked selections when a custom track is added. The
   custom subtitle fields use the shared Ember surface, form, and compact
   primary-action contracts.
+- Unknown HTTP(S) subtitle tracks are sampled through the background service
+  worker and analyzed with Chrome's native language detector. Confident
+  results update only the track's language metadata and show the detected
+  language plus confidence; the original label and URL remain unchanged.
+  Short, low-confidence, unsupported, or inaccessible samples stay Unknown
+  with an explicit uncertain or unavailable status rather than a guess.
 - The deployment surface shows TheIntroDB lookup progress, found marker ranges,
   empty results, and recoverable errors before submission.
 - If TheIntroDB has no markers or its lookup fails, users can add intro, recap,
@@ -68,6 +77,17 @@ the subtitle list had visible overflow with equal client/content heights,
 language labels contained no source text, English remained selected after a
 Portuguese custom track was added and selected, inputs cleared after the add,
 and the page had no horizontal overflow or runtime errors.
+Content-based subtitle detection passed `node --check` for `popup.js` and
+`background.js`, duplicate-ID and HTML/JavaScript ID-contract checks,
+`git diff --check`, and a nine-track browser scenario at popup dimensions.
+Turkish text was detected and rendered as `Turkish · TR` with 97% confidence;
+short and unavailable samples remained Unknown with honest terminal states.
+The full subtitle list had equal client/content heights, no inner or horizontal
+overflow, and no runtime errors. Draft serialization retained the original
+label while persisting `tr`, its detected source, and confidence; a selected
+track produced `{ language: "tr", url }` in the deployment payload. A direct
+background harness confirmed the 128 KiB range cap, captured-header reuse, and
+safe rejection of unsupported URLs.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear

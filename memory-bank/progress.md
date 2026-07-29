@@ -42,6 +42,10 @@ Last verified: 2026-07-29
 - Subtitle tracks expanded without an inner scrollbar, labeled by normalized
   language rather than source host, and paired with a semantic Ember custom
   subtitle editor (`c353d79`).
+- Unknown subtitle tracks detected from their dialogue text without changing
+  their original label or URL; confident language metadata is persisted and
+  submitted, while uncertain or unavailable tracks remain explicitly Unknown
+  (`f30fac1`).
 - Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
 
 ### Project workflow
@@ -72,6 +76,16 @@ Last verified: 2026-07-29
   list height with visible overflow, language-name/code labels, retained
   selection, cleared custom inputs, accessible Read actions, no horizontal
   overflow, and no runtime errors.
+- Native subtitle detection scenario with a Turkish sample detected as
+  `Turkish · TR` at 97%, plus short-content and unavailable samples retained as
+  Unknown with explicit status text. The nine-row list had no nested or
+  horizontal overflow and emitted no runtime errors.
+- Deployment-draft verification confirmed detected `tr` metadata, source, and
+  confidence persist while the original label remains unchanged; deployment
+  serialized the selected track with `language: "tr"`.
+- Bounded-fetch verification confirmed a `bytes=0-131071` request, a 128 KiB
+  maximum sample, captured authorization-header reuse, and rejection of
+  unsupported URL schemes.
 
 ## Next candidates
 
