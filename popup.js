@@ -512,7 +512,8 @@ function getDeploymentDraftStorageKey(contextKey) {
 
 function getSelectedSubtitleUrls() {
   if (!subtitlesList) return [];
-  return Array.from(subtitlesList.querySelectorAll('input[type="checkbox"]:checked')).map((checkbox) => checkbox.value);
+  return Array.from(subtitlesList.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)'))
+    .map((checkbox) => checkbox.value);
 }
 
 function getSerializableSubtitles() {
@@ -528,7 +529,10 @@ function getSerializableSubtitles() {
         ? Number(subtitle.languageConfidence)
         : null,
       declaredLanguage: subtitle.declaredLanguage || null,
-      declaredLanguageSource: subtitle.declaredLanguageSource || null
+      declaredLanguageSource: subtitle.declaredLanguageSource || null,
+      isBroken: subtitle.isBroken === true,
+      brokenReason: subtitle.brokenReason || null,
+      defaultSelectionApplied: subtitle.defaultSelectionApplied === true
     }));
 }
 
@@ -659,7 +663,7 @@ function applyDeploymentDraft(draft) {
     const selectedSubtitleUrls = new Set(draft.selectedSubtitleUrls || []);
     if (subtitlesList) {
       subtitlesList.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-        checkbox.checked = selectedSubtitleUrls.has(checkbox.value);
+        checkbox.checked = !checkbox.disabled && selectedSubtitleUrls.has(checkbox.value);
       });
     }
 
@@ -1870,7 +1874,7 @@ function normalizeComparableSubtitleLanguage(language) {
 }
 
 function shouldDetectSubtitleLanguage(subtitle) {
-    return Boolean(subtitle) && subtitle.languageSource !== 'detected';
+    return Boolean(subtitle) && subtitle.languageSource !== 'detected' && subtitle.isBroken !== true;
 }
 
 function canDetectSubtitleLanguage(subtitle) {
@@ -1960,6 +1964,22 @@ function selectConfidentSubtitleLanguage(result) {
 }
 
 function getSubtitleDetectionStatus(subtitle, contextKey = activeDeploymentKey) {
+    if (subtitle.isBroken) {
+      const languageWasUnknown = isUnknownSubtitleLanguage(subtitle);
+      const reason = subtitle.brokenReason || subtitle.languageDetectionStatus || 'unavailable';
+      const explanation = reason === 'uncertain'
+        ? (languageWasUnknown
+            ? 'Language could not be detected confidently'
+            : 'Language could not be verified confidently')
+        : (languageWasUnknown
+            ? 'Subtitle text was unavailable for detection'
+            : 'Subtitle text was unavailable for verification');
+      return {
+        state: 'broken',
+        text: `Broken · ${explanation}`
+      };
+    }
+
     if (subtitle.languageSource === 'detected') {
       const confidence = Number(subtitle.languageConfidence);
       const confidenceText = Number.isFinite(confidence) ? ` · ${Math.round(confidence)}%` : '';
@@ -2033,14 +2053,22 @@ async function detectSubtitleLanguage(subtitleUrl, contextKey) {
 
       if (!sampleResponse.ok) {
         currentSubtitle.languageDetectionStatus = 'unavailable';
+        currentSubtitle.isBroken = true;
+        currentSubtitle.brokenReason = 'unavailable';
+        currentSubtitle.defaultSelectionApplied = true;
         populateSubtitles({ preserveSelection: true });
+        await persistDeploymentDraft();
         return;
       }
 
       const dialogue = extractSubtitleDialogue(sampleResponse.text);
       if (dialogue.length < SUBTITLE_DETECTION_MIN_CHARACTERS) {
         currentSubtitle.languageDetectionStatus = 'uncertain';
+        currentSubtitle.isBroken = true;
+        currentSubtitle.brokenReason = 'uncertain';
+        currentSubtitle.defaultSelectionApplied = true;
         populateSubtitles({ preserveSelection: true });
+        await persistDeploymentDraft();
         return;
       }
 
@@ -2053,7 +2081,11 @@ async function detectSubtitleLanguage(subtitleUrl, contextKey) {
       const detectedLanguage = selectConfidentSubtitleLanguage(detectionResult);
       if (!detectedLanguage) {
         latestSubtitle.languageDetectionStatus = 'uncertain';
+        latestSubtitle.isBroken = true;
+        latestSubtitle.brokenReason = 'uncertain';
+        latestSubtitle.defaultSelectionApplied = true;
         populateSubtitles({ preserveSelection: true });
+        await persistDeploymentDraft();
         return;
       }
 
@@ -2068,8 +2100,15 @@ async function detectSubtitleLanguage(subtitleUrl, contextKey) {
       latestSubtitle.language = detectedLanguage.language;
       latestSubtitle.languageSource = 'detected';
       latestSubtitle.languageConfidence = detectedLanguage.percentage;
+      const shouldApplyDefaultSelection = latestSubtitle.defaultSelectionApplied !== true;
+      latestSubtitle.isBroken = false;
+      latestSubtitle.defaultSelectionApplied = true;
+      delete latestSubtitle.brokenReason;
       delete latestSubtitle.languageDetectionStatus;
-      populateSubtitles({ preserveSelection: true });
+      populateSubtitles({
+        preserveSelection: true,
+        defaultSelectUrls: shouldApplyDefaultSelection ? [subtitleUrl] : []
+      });
       await persistDeploymentDraft();
     })().finally(() => {
       subtitleLanguageDetectionRequests.delete(requestKey);
@@ -2083,6 +2122,7 @@ function populateSubtitles(options = {}) {
     if (!subtitlesList || !subtitlesWrapper) return;
     const preserveSelection = Boolean(options.preserveSelection);
     const selectedSubtitleUrls = preserveSelection ? new Set(getSelectedSubtitleUrls()) : new Set();
+    const defaultSelectUrls = new Set(options.defaultSelectUrls || []);
     const contextKey = activeDeploymentKey;
     const pendingDetections = [];
 
@@ -2101,8 +2141,14 @@ function populateSubtitles(options = {}) {
                   pendingDetections.push(sub.url);
                 } else {
                   sub.languageDetectionStatus = 'unavailable';
+                  sub.isBroken = true;
+                  sub.brokenReason = 'unavailable';
+                  sub.defaultSelectionApplied = true;
                 }
               }
+            } else if (!sub.isBroken && sub.defaultSelectionApplied !== true) {
+              sub.defaultSelectionApplied = true;
+              defaultSelectUrls.add(sub.url);
             }
 
             const lang = sub.lang || sub.language || 'en';
@@ -2110,6 +2156,7 @@ function populateSubtitles(options = {}) {
             const id = `sub-checkbox-${index}`;
             const checkboxWrapper = document.createElement('div');
             checkboxWrapper.className = 'subtitle-track-row';
+            if (sub.isBroken) checkboxWrapper.dataset.state = 'broken';
 
             const checkbox = document.createElement('input');
             checkbox.id = id;
@@ -2117,7 +2164,10 @@ function populateSubtitles(options = {}) {
             checkbox.value = sub.url;
             checkbox.dataset.lang = lang;
             checkbox.className = 'subtitle-track-checkbox';
-            checkbox.checked = selectedSubtitleUrls.has(sub.url);
+            checkbox.disabled = sub.isBroken === true;
+            checkbox.checked = !checkbox.disabled
+              && (selectedSubtitleUrls.has(sub.url) || defaultSelectUrls.has(sub.url));
+            if (checkbox.disabled) checkbox.setAttribute('aria-disabled', 'true');
 
             const label = document.createElement('label');
             label.htmlFor = id;
@@ -2256,7 +2306,7 @@ async function deployMetadataPayload() {
   const selectedLanguage = languageSelector ? languageSelector.value : 'en';
   const selectedSubtitles = [];
   if (subtitlesList) {
-    const subtitleCheckboxes = subtitlesList.querySelectorAll('input[type="checkbox"]:checked');
+    const subtitleCheckboxes = subtitlesList.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)');
     subtitleCheckboxes.forEach(checkbox => {
         let code = checkbox.dataset.lang || 'en';
         if (code === 'unknown') code = 'en';
@@ -2712,11 +2762,6 @@ function openCustomRecordInDeployPage(record, restoredDraft = undefined) {
   // Populate subtitles checkboxes
   availableSubtitles = record.subtitles || [];
   populateSubtitles();
-  // Check them all by default since they were saved to the record
-  if (subtitlesList) {
-    const checkboxes = subtitlesList.querySelectorAll('input[type="checkbox"]');
-    checkboxes.forEach(cb => cb.checked = true);
-  }
 
   resetDeployButtonState();
   const deploymentKey = activeDeploymentKey;
@@ -2747,7 +2792,7 @@ function saveCustomRecordWithoutModal() {
   const selectedLanguage = languageSelector ? languageSelector.value : 'en';
   const selectedSubtitles = [];
   if (subtitlesList) {
-    const subtitleCheckboxes = subtitlesList.querySelectorAll('input[type="checkbox"]:checked');
+    const subtitleCheckboxes = subtitlesList.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)');
     subtitleCheckboxes.forEach(checkbox => {
       const code = checkbox.dataset.lang || 'en';
       selectedSubtitles.push({
@@ -2824,11 +2869,11 @@ function addCustomSubtitleTrack() {
   inputCustomSubUrl.value = '';
   inputCustomSubLang.value = '';
 
-  // Check the newly added item (it should be the last item in subtitles-list)
+  // Restore existing choices; the new track activates only after verification succeeds.
   if (subtitlesList) {
     const checkboxes = subtitlesList.querySelectorAll('input[type="checkbox"]');
-    checkboxes.forEach((checkbox, index) => {
-      checkbox.checked = selectedSubtitleUrls.has(checkbox.value) || index === checkboxes.length - 1;
+    checkboxes.forEach((checkbox) => {
+      checkbox.checked = !checkbox.disabled && selectedSubtitleUrls.has(checkbox.value);
     });
   }
   persistDeploymentDraft();

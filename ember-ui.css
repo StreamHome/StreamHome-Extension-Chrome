@@ -1244,12 +1244,25 @@ body.ember-popup {
   background: rgba(39, 24, 19, 0.56);
 }
 
+.subtitle-track-row[data-state="broken"] {
+  border-color: rgba(255, 111, 97, 0.28);
+}
+
 .subtitle-track-checkbox {
   width: 15px;
   height: 15px;
   min-height: 15px !important;
   margin: 0;
   accent-color: var(--ember-orange);
+}
+
+.subtitle-track-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.subtitle-track-row[data-state="broken"] .subtitle-track-label {
+  cursor: not-allowed;
 }
 
 .subtitle-track-label {
@@ -1310,6 +1323,10 @@ body.ember-popup {
 
 .subtitle-track-detection[data-state="corrected"] {
   color: var(--ember-orange-bright);
+}
+
+.subtitle-track-detection[data-state="broken"] {
+  color: var(--ember-error);
 }
 
 .subtitle-track-detection[data-state="uncertain"],
