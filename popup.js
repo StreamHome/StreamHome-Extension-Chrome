@@ -40,6 +40,10 @@ const LANGUAGE_NAMES = Object.freeze({
 const SUBTITLE_LANGUAGE_DISPLAY_NAMES = typeof Intl !== 'undefined' && typeof Intl.DisplayNames === 'function'
   ? new Intl.DisplayNames(['en'], { type: 'language' })
   : null;
+const SUBTITLE_DETECTION_MIN_CHARACTERS = 80;
+const SUBTITLE_DETECTION_MIN_RELIABLE_PERCENTAGE = 50;
+const SUBTITLE_DETECTION_MIN_UNRELIABLE_PERCENTAGE = 85;
+const subtitleLanguageDetectionRequests = new Map();
 
 // Create Task search variables
 let selectedTmdbId = null;
@@ -518,7 +522,11 @@ function getSerializableSubtitles() {
       url: subtitle.url,
       lang: subtitle.lang || subtitle.language || 'en',
       language: subtitle.language || subtitle.lang || 'en',
-      label: subtitle.label || subtitle.lang || subtitle.language || 'Subtitle'
+      label: subtitle.label || subtitle.lang || subtitle.language || 'Subtitle',
+      languageSource: subtitle.languageSource || 'unknown',
+      languageConfidence: Number.isFinite(Number(subtitle.languageConfidence))
+        ? Number(subtitle.languageConfidence)
+        : null
     }));
 }
 
@@ -1349,11 +1357,21 @@ function getSubtitleInfo(url) {
         const allNames = [code, ...names];
         const regex = new RegExp(`[\\/_\\.-](${allNames.join('|')})([\\/_\\.-]|\\.|$)`, 'i');
         if (regex.test(lowerUrl)) {
-            return { url, lang: code, label: getSubtitleLanguageName(code) };
+            return {
+              url,
+              lang: code,
+              label: getSubtitleLanguageName(code),
+              languageSource: 'url'
+            };
         }
     }
 
-    return { url, lang: 'unknown', label: getSubtitleLanguageName('unknown') };
+    return {
+      url,
+      lang: 'unknown',
+      label: getSubtitleLanguageName('unknown'),
+      languageSource: 'unknown'
+    };
 }
 
 // Yeni kategorileri de destekleyen dağıtım motoru
@@ -1832,12 +1850,203 @@ function getSubtitleLanguageName(language) {
     return normalized.toUpperCase();
 }
 
-function populateSubtitles() {
+function getSubtitleDetectionKey(url, contextKey = activeDeploymentKey) {
+    return `${contextKey || 'no-context'}:${String(url || '')}`;
+}
+
+function isUnknownSubtitleLanguage(subtitle) {
+    const language = String(subtitle && (subtitle.lang || subtitle.language) || '').trim().toLowerCase();
+    return !language || language === 'unknown' || language === 'und';
+}
+
+function canDetectSubtitleLanguage(subtitle) {
+    try {
+      const parsedUrl = new URL(subtitle && subtitle.url);
+      return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+    } catch (error) {
+      return false;
+    }
+}
+
+function extractSubtitleDialogue(sample) {
+    return String(sample || '')
+      .replace(/^\uFEFF/, '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\{\\[^}]*\}/g, ' ')
+      .split(/\r?\n/)
+      .filter((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        if (/^(WEBVTT|NOTE|STYLE|REGION)\b/i.test(trimmed)) return false;
+        if (/^\d+$/.test(trimmed)) return false;
+        if (/^(?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{3}\s+-->\s+(?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{3}/.test(trimmed)) return false;
+        return true;
+      })
+      .join(' ')
+      .replace(/&(?:nbsp|amp|quot|apos|lt|gt);/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 30000);
+}
+
+function requestSubtitleSample(subtitle) {
+    const headers = (currentTaskContext
+      && currentTaskContext.capturedHeaders
+      && currentTaskContext.capturedHeaders[subtitle.url])
+      ? currentTaskContext.capturedHeaders[subtitle.url]
+      : {};
+
+    return new Promise((resolve) => {
+      if (!chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+        resolve({ ok: false, reason: 'messaging-unavailable' });
+        return;
+      }
+
+      chrome.runtime.sendMessage({
+        action: 'fetch_subtitle_sample',
+        url: subtitle.url,
+        headers
+      }, (response) => {
+        const runtimeError = chrome.runtime.lastError;
+        resolve(runtimeError ? { ok: false, reason: 'message-failed' } : (response || { ok: false, reason: 'empty-response' }));
+      });
+    });
+}
+
+function detectSubtitleTextLanguage(text) {
+    return new Promise((resolve) => {
+      if (!chrome.i18n || typeof chrome.i18n.detectLanguage !== 'function') {
+        resolve(null);
+        return;
+      }
+
+      chrome.i18n.detectLanguage(text, (result) => {
+        const runtimeError = chrome.runtime.lastError;
+        resolve(runtimeError ? null : result);
+      });
+    });
+}
+
+function selectConfidentSubtitleLanguage(result) {
+    if (!result || !Array.isArray(result.languages)) return null;
+
+    const candidate = result.languages
+      .filter((item) => item && item.language && item.language !== 'und')
+      .map((item) => ({
+        language: String(item.language).toLowerCase(),
+        percentage: Number(item.percentage) || 0
+      }))
+      .sort((left, right) => right.percentage - left.percentage)[0];
+
+    if (!candidate) return null;
+    const threshold = result.isReliable
+      ? SUBTITLE_DETECTION_MIN_RELIABLE_PERCENTAGE
+      : SUBTITLE_DETECTION_MIN_UNRELIABLE_PERCENTAGE;
+    return candidate.percentage >= threshold ? candidate : null;
+}
+
+function getSubtitleDetectionStatus(subtitle, contextKey = activeDeploymentKey) {
+    if (subtitle.languageSource === 'detected') {
+      const confidence = Number(subtitle.languageConfidence);
+      return {
+        state: 'detected',
+        text: Number.isFinite(confidence)
+          ? `Detected from subtitle text · ${Math.round(confidence)}%`
+          : 'Detected from subtitle text'
+      };
+    }
+
+    if (!isUnknownSubtitleLanguage(subtitle)) return null;
+    const requestKey = getSubtitleDetectionKey(subtitle.url, contextKey);
+    const state = subtitle.languageDetectionStatus
+      || (subtitleLanguageDetectionRequests.has(requestKey) ? 'detecting' : 'idle');
+    if (state === 'detecting') return { state, text: 'Detecting language from subtitle text…' };
+    if (state === 'uncertain') return { state, text: 'Language could not be detected confidently' };
+    if (state === 'unavailable') return { state, text: 'Subtitle text was unavailable for detection' };
+    return null;
+}
+
+async function detectSubtitleLanguage(subtitleUrl, contextKey) {
+    const requestKey = getSubtitleDetectionKey(subtitleUrl, contextKey);
+    if (subtitleLanguageDetectionRequests.has(requestKey)) return subtitleLanguageDetectionRequests.get(requestKey);
+
+    const detectionPromise = (async () => {
+      const subtitleAtStart = availableSubtitles.find((item) => item && item.url === subtitleUrl);
+      if (!subtitleAtStart || !isUnknownSubtitleLanguage(subtitleAtStart)) return;
+
+      const sampleResponse = await requestSubtitleSample(subtitleAtStart);
+      if (activeDeploymentKey !== contextKey) return;
+
+      const currentSubtitle = availableSubtitles.find((item) => item && item.url === subtitleUrl);
+      if (!currentSubtitle || !isUnknownSubtitleLanguage(currentSubtitle)) return;
+
+      if (!sampleResponse.ok) {
+        currentSubtitle.languageDetectionStatus = 'unavailable';
+        populateSubtitles({ preserveSelection: true });
+        return;
+      }
+
+      const dialogue = extractSubtitleDialogue(sampleResponse.text);
+      if (dialogue.length < SUBTITLE_DETECTION_MIN_CHARACTERS) {
+        currentSubtitle.languageDetectionStatus = 'uncertain';
+        populateSubtitles({ preserveSelection: true });
+        return;
+      }
+
+      const detectionResult = await detectSubtitleTextLanguage(dialogue);
+      if (activeDeploymentKey !== contextKey) return;
+
+      const latestSubtitle = availableSubtitles.find((item) => item && item.url === subtitleUrl);
+      if (!latestSubtitle || !isUnknownSubtitleLanguage(latestSubtitle)) return;
+
+      const detectedLanguage = selectConfidentSubtitleLanguage(detectionResult);
+      if (!detectedLanguage) {
+        latestSubtitle.languageDetectionStatus = 'uncertain';
+        populateSubtitles({ preserveSelection: true });
+        return;
+      }
+
+      latestSubtitle.lang = detectedLanguage.language;
+      latestSubtitle.language = detectedLanguage.language;
+      latestSubtitle.languageSource = 'detected';
+      latestSubtitle.languageConfidence = detectedLanguage.percentage;
+      delete latestSubtitle.languageDetectionStatus;
+      populateSubtitles({ preserveSelection: true });
+      await persistDeploymentDraft();
+    })().finally(() => {
+      subtitleLanguageDetectionRequests.delete(requestKey);
+    });
+
+    subtitleLanguageDetectionRequests.set(requestKey, detectionPromise);
+    return detectionPromise;
+}
+
+function populateSubtitles(options = {}) {
     if (!subtitlesList || !subtitlesWrapper) return;
+    const preserveSelection = Boolean(options.preserveSelection);
+    const selectedSubtitleUrls = preserveSelection ? new Set(getSelectedSubtitleUrls()) : new Set();
+    const contextKey = activeDeploymentKey;
+    const pendingDetections = [];
+
     subtitlesList.innerHTML = '';
     if (availableSubtitles.length > 0) {
         subtitlesWrapper.classList.remove('hidden');
         availableSubtitles.forEach((sub, index) => {
+            const requestKey = getSubtitleDetectionKey(sub.url, contextKey);
+            if (isUnknownSubtitleLanguage(sub)) {
+              if (subtitleLanguageDetectionRequests.has(requestKey)
+                && (!sub.languageDetectionStatus || sub.languageDetectionStatus === 'idle' || sub.languageDetectionStatus === 'detecting')) {
+                sub.languageDetectionStatus = 'detecting';
+              } else if (!sub.languageDetectionStatus || sub.languageDetectionStatus === 'idle') {
+                if (canDetectSubtitleLanguage(sub) && contextKey) {
+                  sub.languageDetectionStatus = 'detecting';
+                  pendingDetections.push(sub.url);
+                } else {
+                  sub.languageDetectionStatus = 'unavailable';
+                }
+              }
+            }
+
             const lang = sub.lang || sub.language || 'en';
             const languageName = getSubtitleLanguageName(lang);
             const id = `sub-checkbox-${index}`;
@@ -1850,11 +2059,15 @@ function populateSubtitles() {
             checkbox.value = sub.url;
             checkbox.dataset.lang = lang;
             checkbox.className = 'subtitle-track-checkbox';
+            checkbox.checked = selectedSubtitleUrls.has(sub.url);
 
             const label = document.createElement('label');
             label.htmlFor = id;
             label.className = 'subtitle-track-label';
             label.title = sub.url;
+
+            const languageLine = document.createElement('span');
+            languageLine.className = 'subtitle-track-language-line';
 
             const languageText = document.createElement('span');
             languageText.className = 'subtitle-track-language';
@@ -1864,7 +2077,17 @@ function populateSubtitles() {
             languageCode.className = 'subtitle-track-code';
             languageCode.textContent = String(lang || 'unknown').toUpperCase();
 
-            label.append(languageText, languageCode);
+            languageLine.append(languageText, languageCode);
+            label.append(languageLine);
+
+            const detectionStatus = getSubtitleDetectionStatus(sub, contextKey);
+            if (detectionStatus) {
+              const status = document.createElement('span');
+              status.className = 'subtitle-track-detection';
+              status.dataset.state = detectionStatus.state;
+              status.textContent = detectionStatus.text;
+              label.append(status);
+            }
             
             const rightSide = document.createElement('button');
             rightSide.type = 'button';
@@ -1891,6 +2114,9 @@ function populateSubtitles() {
             checkboxWrapper.append(checkbox, label, rightSide);
             
             subtitlesList.appendChild(checkboxWrapper);
+        });
+        pendingDetections.forEach((subtitleUrl) => {
+          detectSubtitleLanguage(subtitleUrl, contextKey);
         });
     } else {
         subtitlesWrapper.classList.add('hidden');
@@ -2530,7 +2756,8 @@ function addCustomSubtitleTrack() {
   availableSubtitles.push({
     url: url,
     lang: lang,
-    label: getSubtitleLanguageName(lang)
+    label: getSubtitleLanguageName(lang),
+    languageSource: 'manual'
   });
 
   populateSubtitles();

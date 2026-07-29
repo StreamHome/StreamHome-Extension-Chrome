@@ -10,6 +10,84 @@ const BLACKLISTED_MIMES = [
   'image/', 'font/', 'application/json', 'text/html', 'text/plain', 'application/xml'
 ];
 
+const SUBTITLE_SAMPLE_MAX_BYTES = 128 * 1024;
+
+function buildCapturedFetchHeaders(extractedHeaders = {}, includeRange = false) {
+  const fetchHeaders = { 'X-StreamHome-Sniffer': 'true' };
+  if (extractedHeaders.referer) fetchHeaders.Referer = extractedHeaders.referer;
+  if (extractedHeaders.origin) fetchHeaders.Origin = extractedHeaders.origin;
+  if (extractedHeaders['user-agent']) fetchHeaders['User-Agent'] = extractedHeaders['user-agent'];
+  if (extractedHeaders.cookie) fetchHeaders.Cookie = extractedHeaders.cookie;
+  if (extractedHeaders.authorization) fetchHeaders.Authorization = extractedHeaders.authorization;
+  if (includeRange) fetchHeaders.Range = `bytes=0-${SUBTITLE_SAMPLE_MAX_BYTES - 1}`;
+  return fetchHeaders;
+}
+
+async function readTextSample(response, maxBytes = SUBTITLE_SAMPLE_MAX_BYTES) {
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    return (await response.text()).slice(0, maxBytes);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let text = '';
+
+  try {
+    while (totalBytes < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const remaining = maxBytes - totalBytes;
+      const chunk = value.byteLength > remaining ? value.subarray(0, remaining) : value;
+      totalBytes += chunk.byteLength;
+      text += decoder.decode(chunk, { stream: totalBytes < maxBytes });
+
+      if (value.byteLength > remaining) {
+        await reader.cancel();
+        break;
+      }
+    }
+    text += decoder.decode();
+    return text;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function fetchSubtitleSample(url, extractedHeaders = {}) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch (error) {
+    return { ok: false, reason: 'invalid-url' };
+  }
+
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    return { ok: false, reason: 'unsupported-url' };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+  try {
+    const response = await fetch(parsedUrl.href, {
+      headers: buildCapturedFetchHeaders(extractedHeaders, true),
+      signal: controller.signal
+    });
+    if (!response.ok) return { ok: false, reason: `http-${response.status}` };
+
+    const text = await readTextSample(response);
+    return text.trim()
+      ? { ok: true, text }
+      : { ok: false, reason: 'empty' };
+  } catch (error) {
+    return { ok: false, reason: error && error.name === 'AbortError' ? 'timeout' : 'fetch-failed' };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 // Helper to extract resolution numbers
 function getResolution(lowerUrl) {
   if (lowerUrl.includes('1080') || lowerUrl.includes('fhd') || lowerUrl.includes('1080p')) return '1080';
@@ -43,18 +121,11 @@ function parseDashManifest(text) {
 
 async function detectManifestQualities(url, type, extractedHeaders) {
   try {
-    const fetchHeaders = { 'X-StreamHome-Sniffer': 'true' };
-    if (extractedHeaders.referer) fetchHeaders['Referer'] = extractedHeaders.referer;
-    if (extractedHeaders.origin) fetchHeaders['Origin'] = extractedHeaders.origin;
-    if (extractedHeaders['user-agent']) fetchHeaders['User-Agent'] = extractedHeaders['user-agent'];
-    if (extractedHeaders.cookie) fetchHeaders['Cookie'] = extractedHeaders.cookie;
-    if (extractedHeaders.authorization) fetchHeaders['Authorization'] = extractedHeaders.authorization;
-
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 5000);
 
     const response = await fetch(url, {
-      headers: fetchHeaders,
+      headers: buildCapturedFetchHeaders(extractedHeaders),
       signal: controller.signal
     });
     clearTimeout(id);
@@ -471,7 +542,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Determine rule ID dynamically from tab ID to avoid collisions
   const ruleId = (sender.tab && sender.tab.id) ? sender.tab.id : 1001;
 
-  if (message.action === 'set_bypass_rules') {
+  if (message.action === 'fetch_subtitle_sample') {
+    fetchSubtitleSample(message.url, message.headers || {})
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false, reason: 'fetch-failed' }));
+    return true;
+  } else if (message.action === 'set_bypass_rules') {
     const { targetUrl, headers } = message;
     if (!targetUrl) return;
 
