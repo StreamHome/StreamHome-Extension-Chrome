@@ -11,6 +11,8 @@ const BLACKLISTED_MIMES = [
 ];
 
 const SUBTITLE_SAMPLE_MAX_BYTES = 128 * 1024;
+const SUBTITLE_SAMPLE_RULE_ID_BASE = 1500000000;
+let subtitleSampleRuleOffset = 0;
 
 function buildCapturedFetchHeaders(extractedHeaders = {}, includeRange = false) {
   const fetchHeaders = { 'X-StreamHome-Sniffer': 'true' };
@@ -21,6 +23,80 @@ function buildCapturedFetchHeaders(extractedHeaders = {}, includeRange = false) 
   if (extractedHeaders.authorization) fetchHeaders.Authorization = extractedHeaders.authorization;
   if (includeRange) fetchHeaders.Range = `bytes=0-${SUBTITLE_SAMPLE_MAX_BYTES - 1}`;
   return fetchHeaders;
+}
+
+function buildSubtitleSampleFetchHeaders(extractedHeaders = {}, includeRange = false) {
+  const fetchHeaders = { 'X-StreamHome-Sniffer': 'true' };
+  if (extractedHeaders.authorization) fetchHeaders.Authorization = extractedHeaders.authorization;
+  if (includeRange) fetchHeaders.Range = `bytes=0-${SUBTITLE_SAMPLE_MAX_BYTES - 1}`;
+  return fetchHeaders;
+}
+
+function getNextSubtitleSampleRuleId() {
+  subtitleSampleRuleOffset = (subtitleSampleRuleOffset + 1) % 100000000;
+  return SUBTITLE_SAMPLE_RULE_ID_BASE + subtitleSampleRuleOffset;
+}
+
+function escapeDnrRegex(value) {
+  return String(value).replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+}
+
+async function installSubtitleSampleRule(parsedUrl, extractedHeaders = {}) {
+  if (!chrome.declarativeNetRequest || typeof chrome.declarativeNetRequest.updateSessionRules !== 'function') {
+    return null;
+  }
+
+  const requestHeaders = [];
+  const supportedHeaders = ['referer', 'origin', 'user-agent', 'cookie', 'authorization'];
+  supportedHeaders.forEach((header) => {
+    const value = extractedHeaders[header];
+    if (typeof value === 'string' && value) {
+      requestHeaders.push({ header, operation: 'set', value });
+    }
+  });
+  if (requestHeaders.length === 0) return null;
+
+  const ruleId = getNextSubtitleSampleRuleId();
+  const exactUrlRegex = `^${escapeDnrRegex(parsedUrl.href)}$`;
+  const condition = exactUrlRegex.length <= 1900
+    ? {
+        regexFilter: exactUrlRegex,
+        isUrlFilterCaseSensitive: true,
+        resourceTypes: ['xmlhttprequest'],
+        tabIds: [chrome.tabs.TAB_ID_NONE]
+      }
+    : {
+        urlFilter: `||${parsedUrl.host}/`,
+        resourceTypes: ['xmlhttprequest'],
+        tabIds: [chrome.tabs.TAB_ID_NONE]
+      };
+
+  try {
+    await chrome.declarativeNetRequest.updateSessionRules({
+      removeRuleIds: [ruleId],
+      addRules: [{
+        id: ruleId,
+        priority: 100,
+        action: {
+          type: 'modifyHeaders',
+          requestHeaders
+        },
+        condition
+      }]
+    });
+    return ruleId;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function removeSubtitleSampleRule(ruleId) {
+  if (!ruleId) return;
+  try {
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [ruleId] });
+  } catch (error) {
+    // The fetch has already finished; a later rule ID reuse also removes stale rules.
+  }
 }
 
 async function readTextSample(response, maxBytes = SUBTITLE_SAMPLE_MAX_BYTES) {
@@ -66,25 +142,41 @@ async function fetchSubtitleSample(url, extractedHeaders = {}) {
   if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
     return { ok: false, reason: 'unsupported-url' };
   }
+  parsedUrl.hash = '';
 
+  const ruleId = await installSubtitleSampleRule(parsedUrl, extractedHeaders);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 7000);
 
   try {
-    const response = await fetch(parsedUrl.href, {
-      headers: buildCapturedFetchHeaders(extractedHeaders, true),
-      signal: controller.signal
-    });
-    if (!response.ok) return { ok: false, reason: `http-${response.status}` };
+    let failureReason = 'fetch-failed';
+    for (const includeRange of [true, false]) {
+      if (controller.signal.aborted) return { ok: false, reason: 'timeout' };
 
-    const text = await readTextSample(response);
-    return text.trim()
-      ? { ok: true, text }
-      : { ok: false, reason: 'empty' };
-  } catch (error) {
-    return { ok: false, reason: error && error.name === 'AbortError' ? 'timeout' : 'fetch-failed' };
+      try {
+        const response = await fetch(parsedUrl.href, {
+          credentials: 'include',
+          headers: buildSubtitleSampleFetchHeaders(extractedHeaders, includeRange),
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          failureReason = `http-${response.status}`;
+          if (response.body) await response.body.cancel();
+          continue;
+        }
+
+        const text = await readTextSample(response);
+        if (text.trim()) return { ok: true, text };
+        failureReason = 'empty';
+      } catch (error) {
+        if (error && error.name === 'AbortError') return { ok: false, reason: 'timeout' };
+        failureReason = 'fetch-failed';
+      }
+    }
+    return { ok: false, reason: failureReason };
   } finally {
     clearTimeout(timeoutId);
+    await removeSubtitleSampleRule(ruleId);
   }
 }
 
