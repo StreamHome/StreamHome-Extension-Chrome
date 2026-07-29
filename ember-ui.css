@@ -1339,6 +1339,17 @@ body.ember-popup {
   padding: 3px 8px;
 }
 
+.subtitle-track-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.subtitle-track-delete {
+  min-height: 26px;
+  padding: 3px 7px;
+}
+
 .custom-subtitle-editor {
   display: grid;
   gap: 9px;

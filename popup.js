@@ -2186,12 +2186,15 @@ function populateSubtitles(options = {}) {
               label.append(status);
             }
             
-            const rightSide = document.createElement('button');
-            rightSide.type = 'button';
-            rightSide.className = 'ember-inline-action subtitle-track-read';
-            rightSide.textContent = 'Read';
-            rightSide.setAttribute('aria-label', `Read ${languageName} subtitles`);
-            rightSide.addEventListener('click', (e) => {
+            const actions = document.createElement('div');
+            actions.className = 'subtitle-track-actions';
+
+            const readButton = document.createElement('button');
+            readButton.type = 'button';
+            readButton.className = 'ember-inline-action subtitle-track-read';
+            readButton.textContent = 'Read';
+            readButton.setAttribute('aria-label', `Read ${languageName} subtitles`);
+            readButton.addEventListener('click', (e) => {
               e.preventDefault();
               e.stopPropagation();
               
@@ -2208,7 +2211,20 @@ function populateSubtitles(options = {}) {
 
               chrome.tabs.create({ url: `reader.html?${readerParams.toString()}` });
             });
-            checkboxWrapper.append(checkbox, label, rightSide);
+
+            const deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'ember-inline-action ember-inline-action--danger subtitle-track-delete';
+            deleteButton.textContent = 'Delete';
+            deleteButton.setAttribute('aria-label', `Delete ${languageName} subtitles`);
+            deleteButton.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              deleteSubtitleTrack(sub.url);
+            });
+
+            actions.append(readButton, deleteButton);
+            checkboxWrapper.append(checkbox, label, actions);
             
             subtitlesList.appendChild(checkboxWrapper);
         });
@@ -2218,6 +2234,26 @@ function populateSubtitles(options = {}) {
     } else {
         subtitlesWrapper.classList.add('hidden');
     }
+}
+
+async function deleteSubtitleTrack(url) {
+  if (!url) return;
+
+  availableSubtitles = (availableSubtitles || []).filter((subtitle) => subtitle && subtitle.url !== url);
+  populateSubtitles({ preserveSelection: true });
+  await persistDeploymentDraft();
+
+  if (editingRecordId) {
+    await saveCustomRecordWithoutModal();
+    return;
+  }
+
+  if (currentTaskId != null) {
+    await deleteStreamRecord(currentTaskId, url, {
+      season: currentTaskContext && currentTaskContext.season,
+      episode: currentTaskContext && currentTaskContext.episode
+    });
+  }
 }
 
 function resetDeployButtonState() {
@@ -2550,44 +2586,49 @@ function navigateBackFromStreams() {
   });
 }
 
-function deleteStreamRecord(taskId, url) {
-  chrome.storage.local.get(['scanned_tasks'], (result) => {
-    const tasks = result.scanned_tasks || [];
-    const taskIndex = tasks.findIndex(t => t.id == taskId);
-    if (taskIndex === -1) return;
-
-    const task = tasks[taskIndex];
-    
-    const removeFromArray = (arr, val) => {
-      if (!arr) return;
-      const index = arr.indexOf(val);
-      if (index !== -1) arr.splice(index, 1);
-    };
-
-    if (task.type === 'series') {
-      const season = task.activeSeason || 1;
-      const episode = task.activeEpisode || 1;
-      const epKey = `${season}x${episode}`;
-      if (task.episodes && task.episodes[epKey]) {
-        const epData = task.episodes[epKey];
-        removeFromArray(epData.rawStreams, url);
-        removeFromArray(epData.favorites, url);
-        if (epData.taggedVideoUrl === url) epData.taggedVideoUrl = null;
-        if (epData.taggedAudioUrl === url) epData.taggedAudioUrl = null;
+function deleteStreamRecord(taskId, url, episodeScope = null) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['scanned_tasks'], (result) => {
+      const tasks = result.scanned_tasks || [];
+      const taskIndex = tasks.findIndex(t => t.id == taskId);
+      if (taskIndex === -1) {
+        resolve();
+        return;
       }
-    } else {
-      removeFromArray(task.favorites, url);
-      if (task.taggedVideoUrl === url) task.taggedVideoUrl = null;
-      if (task.taggedAudioUrl === url) task.taggedAudioUrl = null;
-    }
 
-    if (task.capturedHeaders) delete task.capturedHeaders[url];
-    if (task.streamQualities) delete task.streamQualities[url];
-    
-    // Always remove from the primary/unscoped rawStreams
-    removeFromArray(task.rawStreams, url);
+      const task = tasks[taskIndex];
 
-    chrome.storage.local.set({ scanned_tasks: tasks });
+      const removeFromArray = (arr, val) => {
+        if (!arr) return;
+        const index = arr.indexOf(val);
+        if (index !== -1) arr.splice(index, 1);
+      };
+
+      if (task.type === 'series') {
+        const season = (episodeScope && episodeScope.season) ?? task.activeSeason ?? 1;
+        const episode = (episodeScope && episodeScope.episode) ?? task.activeEpisode ?? 1;
+        const epKey = `${season}x${episode}`;
+        if (task.episodes && task.episodes[epKey]) {
+          const epData = task.episodes[epKey];
+          removeFromArray(epData.rawStreams, url);
+          removeFromArray(epData.favorites, url);
+          if (epData.taggedVideoUrl === url) epData.taggedVideoUrl = null;
+          if (epData.taggedAudioUrl === url) epData.taggedAudioUrl = null;
+        }
+      } else {
+        removeFromArray(task.favorites, url);
+        if (task.taggedVideoUrl === url) task.taggedVideoUrl = null;
+        if (task.taggedAudioUrl === url) task.taggedAudioUrl = null;
+      }
+
+      if (task.capturedHeaders) delete task.capturedHeaders[url];
+      if (task.streamQualities) delete task.streamQualities[url];
+
+      // Always remove from the primary/unscoped rawStreams
+      removeFromArray(task.rawStreams, url);
+
+      chrome.storage.local.set({ scanned_tasks: tasks }, resolve);
+    });
   });
 }
 
