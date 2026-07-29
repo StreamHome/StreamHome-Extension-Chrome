@@ -63,16 +63,18 @@ then reflected in the tracked memory bank through a separate commit and push.
 If the scope is missing or ambiguous, the agent asks for permission instead of
 acting.
 
-## 15. Detect only unknown subtitle languages from bounded content
+## 15. Verify every subtitle language from bounded content
 
-Languages supplied manually or inferred from a subtitle URL remain
-authoritative. For Unknown HTTP(S) tracks, the background worker fetches a
-bounded 128 KiB sample with a timeout. Protected URLs receive captured source
-headers through a temporary URL-scoped rule limited to requests without a tab;
-the worker tries Range first and falls back to a credentialed full request
-while preserving the byte cap, then removes the rule. The popup strips
-subtitle formatting and uses Chrome's native language detector. It accepts
-only sufficiently long, confident results, scopes async completion to the
-active deployment, and otherwise leaves the language Unknown with an explicit
-reason. A successful detection changes language metadata only; the original
-track label and URL are preserved.
+URL-derived and manually supplied language values are declarations, not final
+truth. Every HTTP(S) subtitle track is checked from its text. The background
+worker fetches a bounded 128 KiB sample with a timeout. Protected URLs receive
+captured source headers through a temporary URL-scoped rule limited to requests
+without a tab; the worker tries Range first and falls back to a credentialed
+full request while preserving the byte cap, then removes the rule. The popup
+strips subtitle formatting and uses Chrome's native language detector. It
+accepts only sufficiently long, confident results and scopes async completion
+to the active deployment. Matches are verified; mismatches use the detected
+language for display and deployment; unknown tracks are detected. The original
+label, URL, declared language, and declaration source are preserved. An
+uncertain or unavailable check never overwrites a known declaration and never
+guesses an unknown language.

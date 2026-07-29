@@ -49,6 +49,10 @@ Last verified: 2026-07-29
 - Protected subtitle detection aligned with the working reader request path by
   applying captured headers in a temporary service-worker rule and retrying
   without Range when necessary (`66f4068`).
+- All downloadable subtitle tracks content-verified regardless of their
+  declared language, with matching declarations verified, mismatches corrected
+  for display and deployment, and original declaration metadata preserved
+  (`6ce8af1`).
 - Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
 
 ### Project workflow
@@ -94,6 +98,13 @@ Last verified: 2026-07-29
   request, succeeded through the full-request fallback, enforced the 128 KiB
   cap, preserved true HTTP 403 and unsupported-URL failures, and confirmed
   temporary request-header rule cleanup.
+- Nine-track browser verification at 410 × 600 confirmed five matching known
+  languages, Spanish-to-English correction, unknown-to-Portuguese detection,
+  and honest known-language uncertain/unavailable states. A manual
+  Spanish-to-Portuguese correction retained its original label and declaration
+  source. Draft serialization and deployment payload checks used corrected
+  `en` and detected `pt`; the list had no nested or horizontal overflow and no
+  runtime errors.
 
 ## Next candidates
 

@@ -70,8 +70,8 @@ expands with its rows rather than creating a nested scroll region. Custom
 subtitle entry uses semantic Ember fields and a compact primary action while
 preserving deployment-draft persistence and checked-track state.
 
-URL-derived and manually assigned subtitle languages are authoritative and are
-not re-detected. For an Unknown HTTP(S) track, the popup asks the background
+Every HTTP(S) subtitle track is content-verified, whether its initial language
+came from the URL, manual entry, or was Unknown. The popup asks the background
 service worker for at most 128 KiB of subtitle text. The fetch can reuse the
 captured Referer, Origin, User-Agent, Cookie, and Authorization headers, uses a
 seven-second timeout, and rejects unsupported URL schemes. Captured headers are
@@ -87,13 +87,17 @@ passing dialogue text to `chrome.i18n.detectLanguage`.
 
 A result is accepted only when the sample has at least 80 dialogue characters
 and the leading language reaches 50% for a reliable detector result or 85% for
-an unreliable result. Otherwise the track remains Unknown. Async completion is
-guarded by `activeDeploymentKey`, so a result cannot update a different
-deployment surface. Successful results persist `languageSource: "detected"`
-and `languageConfidence`, preserve the track's original label and URL, retain
-checked state across rerender, and flow through the existing deployment
-payload. Detecting, detected, uncertain, and unavailable states use semantic
-Ember status styling.
+an unreliable result. Async completion is guarded by `activeDeploymentKey`, so
+a result cannot update a different deployment surface. A confident match is
+shown as verified; a confident mismatch updates `lang` / `language` for display
+and deployment and is shown as corrected; a previously unknown track is shown
+as detected. Successful results persist `languageSource: "detected"` and
+`languageConfidence`. Known tracks also preserve `declaredLanguage` and
+`declaredLanguageSource`, while the original label and URL always remain
+unchanged. Low-confidence or unavailable known tracks retain their declared
+language with a verification warning; unknown tracks remain Unknown. Checked
+state survives rerender, and detected, verified, corrected, uncertain, and
+unavailable states use semantic Ember styling.
 
 ## Deployment boundary
 

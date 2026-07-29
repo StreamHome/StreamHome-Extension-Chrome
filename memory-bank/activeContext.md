@@ -6,6 +6,9 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `6ce8af1`: extended content-language analysis to every downloadable subtitle
+  track, showing verified matches, correcting mismatches, and retaining the
+  original declared language and source in deployment drafts.
 - `66f4068`: fixed content-language detection for protected subtitle URLs by
   applying captured request headers through a temporary service-worker rule
   and retrying without Range when a source rejects ranged requests.
@@ -45,12 +48,16 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   labels, and retain checked selections when a custom track is added. The
   custom subtitle fields use the shared Ember surface, form, and compact
   primary-action contracts.
-- Unknown HTTP(S) subtitle tracks are sampled through the background service
-  worker and analyzed with Chrome's native language detector. Confident
-  results update only the track's language metadata and show the detected
-  language plus confidence; the original label and URL remain unchanged.
-  Short, low-confidence, unsupported, or inaccessible samples stay Unknown
-  with an explicit uncertain or unavailable status rather than a guess.
+- Every HTTP(S) subtitle track is sampled through the background service worker
+  and analyzed with Chrome's native language detector, including tracks whose
+  URL or manual entry already declares a language. Matching declarations show
+  `Verified from subtitle text`; mismatches switch the visible and deployed
+  language to the detected value and show `Corrected from ...`. Previously
+  unknown tracks show `Detected from subtitle text`. The original label, URL,
+  declared language, and declaration source remain stored in the draft.
+  Low-confidence or inaccessible known tracks keep their declared language
+  with an explicit verification warning, while unknown tracks remain Unknown
+  rather than accepting a guess.
   Sampling uses a URL-scoped request-header rule limited to service-worker
   requests, includes source credentials, and falls back from a bounded Range
   request to a bounded full response so URLs that work in the reader are also
@@ -101,6 +108,19 @@ Range. Detection retrieval succeeded through the full-request fallback, still
 capped the sample at 128 KiB, retained genuine HTTP 403 and unsupported-URL
 failures, and left no temporary request-header rules installed. JavaScript
 syntax, deployment-context guards, and `git diff --check` also passed.
+The all-track verification follow-up passed `node --check popup.js`,
+HTML/JavaScript ID-contract and duplicate-ID checks, `git diff --check`, and a
+410 × 600 browser scenario. English, Turkish, German, French, and Japanese
+declarations were verified; a Spanish declaration containing English text was
+corrected to `English · EN`; an unknown Portuguese track was detected as
+`Portuguese · PT`; known Italian and Russian tracks retained their declared
+language when verification was uncertain or unavailable. A manually declared
+Spanish track containing Portuguese was corrected while retaining
+`label: "Spanish"`, `declaredLanguage: "es"`, and
+`declaredLanguageSource: "manual"`. Draft and deployment checks confirmed the
+corrected `en` and detected `pt` payload languages. Nine rows retained equal
+client/content heights, visible overflow, no horizontal overflow, and no
+runtime errors.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
