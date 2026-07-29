@@ -102,3 +102,13 @@ can generalize across normalized CDN families; host-only favorite history
 cannot recommend every resource from that provider. Removing a choice reduces
 only that example rather than deleting a rule that may still be supported by
 other tasks.
+
+## 18. Promote only the strongest recommendation
+
+Several sources can share enough learned structure to cross the recommendation
+threshold, but presenting every qualifying source does not help the user make a
+choice. The popup now scores all eligible non-favorite video streams and moves
+only one winner into Recommended Streams. Explicit video and audio tags remain
+stronger signals than learned similarity; otherwise the highest learned score
+wins. Equal scores keep the first captured source for deterministic behavior,
+and every losing candidate remains visible in its normal quality category.

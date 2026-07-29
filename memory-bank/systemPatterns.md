@@ -62,7 +62,11 @@ once into the versioned examples. The legacy arrays remain readable: exact
 legacy video/audio signatures preserve their former auto-tag behavior, while a
 host-only legacy favorite is intentionally too weak to recommend a source.
 Adding or removing a favorite/tag increments or decrements only its structural
-example, and learned recommendations are ordered by score.
+example. The popup evaluates every eligible non-favorite video source but
+promotes only one into Recommended Streams. An explicit video tag has highest
+priority, then an explicit audio tag, then the learned score. Exact learned
+score ties retain the first captured candidate. All losing candidates stay in
+their normal quality categories.
 
 ## Deployment drafts
 

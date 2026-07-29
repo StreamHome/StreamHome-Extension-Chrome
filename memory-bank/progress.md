@@ -15,6 +15,9 @@ Last verified: 2026-07-29
   with task-history migration, repeated-evidence counts, scored recommendation
   ordering, background auto-tagging, and legacy signature compatibility
   (`6a73a11`).
+- Single-winner recommendation presentation: only the strongest eligible
+  source is promoted, with explicit-tag priority and stable capture-order tie
+  handling; other qualifying sources remain in normal categories (`0110b59`).
 
 ### Metadata and deployment
 
@@ -127,6 +130,12 @@ Last verified: 2026-07-29
   script ordering, duplicate IDs, syntax, and query-value exclusion. The
   browser security policy blocked the local `file:` popup URL, so this change
   has no claimed visual-browser result.
+- Single-winner checks reproduced three internally eligible sources and
+  confirmed exactly one highest-score recommendation. Equal scores selected the
+  first captured source, an explicit video tag outranked learned candidates,
+  invalid or empty collections returned no winner, syntax checks passed, and
+  `git diff --check` was clean. The existing local-`file:` browser restriction
+  again prevented visual popup inspection.
 
 ## Next candidates
 

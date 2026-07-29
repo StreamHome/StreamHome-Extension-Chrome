@@ -6,6 +6,9 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `0110b59`: limited Recommended Streams to one highest-confidence source,
+  preferring an explicit video tag and resolving equal learned scores by stable
+  capture order while leaving losing candidates in their normal categories.
 - `6a73a11`: replaced unused host-only favorite signatures with a shared,
   versioned structural URL learner that migrates existing task feedback,
   recommends related sources, ranks learned matches, and drives background
@@ -54,9 +57,10 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   path tails, filenames, embedded media extensions, and query-key names without
   storing query values. Existing task favorites and tags are migrated once,
   repeated structural choices increase confidence, and weak host-only favorite
-  history cannot recommend every source from one CDN. Learned favorite/video
-  matches appear in the Recommended Streams group; video/audio matches also
-  retain the existing background auto-tag behavior.
+  history cannot recommend every source from one CDN. Only the highest-scoring
+  eligible favorite/video match appears in the Recommended Streams group;
+  other matches remain in their normal quality categories. Video/audio matches
+  also retain the existing background auto-tag behavior.
 - Series streams are stored per episode so navigating between episodes does not leak streams across episode boundaries.
 - Preview playback supports HLS.js, dash.js, and direct media. Subtitle preview uses the dedicated reader surface.
 - Subtitle tracks expand to their full list height inside the deployment
@@ -164,6 +168,13 @@ video-signature compatibility. Stored examples were also checked not to retain
 query values. A local browser visual check was attempted, but the browser
 security policy rejected the extension's `file:` URL, so no new visual-browser
 result is claimed for this change.
+The single-recommendation follow-up passed `node --check` for
+`stream-learning.js` and `popup.js` plus `git diff --check`. A three-candidate
+scenario confirmed that all three could qualify internally while exactly one
+highest-score result was selected. Equal scores retained the first captured
+candidate, an explicit video tag outranked learned candidates, and empty or
+invalid candidate collections produced no recommendation. The browser's
+existing local-`file:` restriction still prevented visual popup inspection.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
