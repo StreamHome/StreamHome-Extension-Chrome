@@ -314,6 +314,15 @@
     return legacy.score > best.score ? legacy : best;
   }
 
+  function selectBestRecommendation(candidates) {
+    let best = null;
+    for (const candidate of Array.isArray(candidates) ? candidates : []) {
+      if (!candidate || !Number.isFinite(candidate.score)) continue;
+      if (!best || candidate.score > best.score) best = candidate;
+    }
+    return best;
+  }
+
   root.StreamLearning = Object.freeze({
     emptyPatterns,
     normalizePatterns,
@@ -321,6 +330,7 @@
     recordFeedback,
     extractFeatures,
     getRecommendation,
+    selectBestRecommendation,
     recommendationThreshold: RECOMMENDATION_THRESHOLD
   });
 })(globalThis);

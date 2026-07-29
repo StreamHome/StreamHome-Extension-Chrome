@@ -1434,13 +1434,16 @@ function renderGroupedStreams(task, patterns = {}, learningTasks = scannedTasks)
   const favoritesList = task.favorites || [];
   const favoriteItems = [];
   const recommendedItems = [];
+  const recommendationCandidates = [];
   const learnedPatterns = StreamLearning.migratePatterns(patterns, learningTasks);
 
-  // Filter and extract favorites and recommendations from video streams
+  // Extract favorites and score every eligible recommendation before choosing one winner.
   for (const res in itemsByRes) {
     itemsByRes[res] = itemsByRes[res].filter(item => {
       const targetUrl = item.videoUrl || item.audioUrl;
-      const isTagged = (task.taggedVideoUrl === targetUrl) || (task.taggedAudioUrl === targetUrl);
+      const isVideoTagged = task.taggedVideoUrl === targetUrl;
+      const isAudioTagged = task.taggedAudioUrl === targetUrl;
+      const isTagged = isVideoTagged || isAudioTagged;
       
       const favoriteRecommendation = StreamLearning.getRecommendation(
         targetUrl,
@@ -1461,16 +1464,26 @@ function renderGroupedStreams(task, patterns = {}, learningTasks = scannedTasks)
         return false; // remove from original category
       }
       if (isRecommended) {
-        item.recommendationScore = isTagged
-          ? Number.MAX_SAFE_INTEGER
-          : Math.max(favoriteRecommendation.score, videoRecommendation.score);
-        recommendedItems.push(item);
-        return false; // remove from original category
+        recommendationCandidates.push({
+          item,
+          resolution: res,
+          score: isVideoTagged
+            ? Number.MAX_SAFE_INTEGER
+            : isAudioTagged
+              ? Number.MAX_SAFE_INTEGER - 1
+              : Math.max(favoriteRecommendation.score, videoRecommendation.score)
+        });
       }
-      return true;
+      return true; // candidates remain in their normal category until one winner is selected
     });
   }
-  recommendedItems.sort((first, second) => second.recommendationScore - first.recommendationScore);
+
+  const bestRecommendation = StreamLearning.selectBestRecommendation(recommendationCandidates);
+  if (bestRecommendation) {
+    recommendedItems.push(bestRecommendation.item);
+    itemsByRes[bestRecommendation.resolution] = itemsByRes[bestRecommendation.resolution]
+      .filter(item => item !== bestRecommendation.item);
+  }
 
   const categories = [
     { id: 'res-favorites', title: '★ Favorite Streams', items: favoriteItems, color: 'text-amber-400', badgeBg: 'bg-amber-950/80 border-amber-800/40 text-amber-400 font-bold' },
