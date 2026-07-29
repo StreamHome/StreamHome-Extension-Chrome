@@ -1,3 +1,5 @@
+import './stream-learning.js';
+
 console.log("[DEBUG] StreamHome Persistent Sniffer Service Worker Started.");
 
 const BLACKLIST_EXTENSIONS = [
@@ -456,18 +458,6 @@ function extractKeyHeaders(requestHeaders) {
   return result;
 }
 
-function getStreamSignature(url) {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.replace('www.', '');
-    const extMatch = parsed.pathname.match(/\.(m3u8|mpd|mp4|mkv|webm|m4a|mp3|aac|ogg|wav|flac)$/i);
-    const ext = extMatch ? extMatch[1].toLowerCase() : '';
-    return ext ? `${host}|.${ext}` : host;
-  } catch (e) {
-    return null;
-  }
-}
-
 function processAndStoreStream(url, type = 'video', requestHeaders = null, sourceTabId = -1) {
   if (url.includes('chrome-extension://')) return;
 
@@ -488,7 +478,7 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
             const activeTaskId = postCheck.activeTaskId;
             const activeTabId = postCheck.activeTabId;
             const tasks = result.scanned_tasks || [];
-            const patterns = result.learned_patterns || { video_patterns: [], audio_patterns: [], favorite_patterns: [] };
+            const patterns = StreamLearning.migratePatterns(result.learned_patterns, tasks);
 
             if (!activeTaskId) {
               next();
@@ -587,17 +577,16 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
         }
 
         // Auto-tagging logic
-        const sig = getStreamSignature(url);
-        if (sig && type !== 'subtitle') {
-           if (patterns.video_patterns.includes(sig) && !targetData.taggedVideoUrl) {
+        if (type !== 'subtitle') {
+           if (StreamLearning.getRecommendation(url, patterns, 'video').recommended && !targetData.taggedVideoUrl) {
               targetData.taggedVideoUrl = url;
            }
-           if (patterns.audio_patterns.includes(sig) && !targetData.taggedAudioUrl) {
+           if (StreamLearning.getRecommendation(url, patterns, 'audio').recommended && !targetData.taggedAudioUrl) {
               targetData.taggedAudioUrl = url;
            }
         }
 
-        chrome.storage.local.set({ scanned_tasks: tasks }, () => {
+        chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns }, () => {
           const badgeVal = task.type === 'series' ? currentEpStreamsCount : task.rawStreams.length;
           chrome.action.setBadgeText({ text: badgeVal.toString() });
           chrome.action.setBadgeBackgroundColor({ color: '#DC2626' });

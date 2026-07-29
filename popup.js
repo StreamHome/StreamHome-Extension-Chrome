@@ -400,7 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (currentTask) {
             chrome.storage.local.get(['learned_patterns'], (pRes) => {
               const renderTask = getScopedTaskForRendering(currentTask);
-              renderGroupedStreams(renderTask, pRes.learned_patterns);
+              renderGroupedStreams(renderTask, pRes.learned_patterns, scannedTasks);
             });
           }
         }
@@ -889,22 +889,10 @@ function deleteTask(id) {
   });
 }
 
-function getStreamSignature(url) {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.replace('www.', '');
-    const extMatch = parsed.pathname.match(/\.(m3u8|mpd|mp4|mkv|webm|m4a|mp3|aac|ogg|wav|flac)$/i);
-    const ext = extMatch ? extMatch[1].toLowerCase() : '';
-    return ext ? `${host}|.${ext}` : host;
-  } catch (e) {
-    return null;
-  }
-}
-
 function toggleFavorite(taskId, url) {
   chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
     const tasks = result.scanned_tasks || [];
-    let patterns = result.learned_patterns || { video_patterns: [], audio_patterns: [], favorite_patterns: [] };
+    let patterns = StreamLearning.migratePatterns(result.learned_patterns, tasks);
     const taskIndex = tasks.findIndex(t => t.id == taskId);
     if (taskIndex === -1) return;
 
@@ -937,14 +925,7 @@ function toggleFavorite(taskId, url) {
       }
     }
 
-    const sig = getStreamSignature(url);
-    if (sig) {
-      if (isAdding) {
-        if (!patterns.favorite_patterns.includes(sig)) patterns.favorite_patterns.push(sig);
-      } else {
-        patterns.favorite_patterns = patterns.favorite_patterns.filter(p => p !== sig);
-      }
-    }
+    patterns = StreamLearning.recordFeedback(patterns, 'favorite', url, isAdding ? 1 : -1);
     chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns });
   });
 }
@@ -952,7 +933,7 @@ function toggleFavorite(taskId, url) {
 function toggleTaggedVideo(taskId, url) {
   chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
     const tasks = result.scanned_tasks || [];
-    let patterns = result.learned_patterns || { video_patterns: [], audio_patterns: [], favorite_patterns: [] };
+    let patterns = StreamLearning.migratePatterns(result.learned_patterns, tasks);
     const taskIndex = tasks.findIndex(t => t.id == taskId);
     if (taskIndex === -1) return;
 
@@ -984,18 +965,8 @@ function toggleTaggedVideo(taskId, url) {
       }
     }
 
-    const sig = getStreamSignature(url);
-    if (sig) {
-      if (isAdding) {
-        if (!patterns.video_patterns.includes(sig)) patterns.video_patterns.push(sig);
-        if (oldUrl) {
-           const oldSig = getStreamSignature(oldUrl);
-           if (oldSig) patterns.video_patterns = patterns.video_patterns.filter(p => p !== oldSig);
-        }
-      } else {
-        patterns.video_patterns = patterns.video_patterns.filter(p => p !== sig);
-      }
-    }
+    if (oldUrl) patterns = StreamLearning.recordFeedback(patterns, 'video', oldUrl, -1);
+    patterns = StreamLearning.recordFeedback(patterns, 'video', url, isAdding ? 1 : -1);
     chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns });
   });
 }
@@ -1003,7 +974,7 @@ function toggleTaggedVideo(taskId, url) {
 function toggleTaggedAudio(taskId, url) {
   chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
     const tasks = result.scanned_tasks || [];
-    let patterns = result.learned_patterns || { video_patterns: [], audio_patterns: [], favorite_patterns: [] };
+    let patterns = StreamLearning.migratePatterns(result.learned_patterns, tasks);
     const taskIndex = tasks.findIndex(t => t.id == taskId);
     if (taskIndex === -1) return;
 
@@ -1035,18 +1006,8 @@ function toggleTaggedAudio(taskId, url) {
       }
     }
 
-    const sig = getStreamSignature(url);
-    if (sig) {
-      if (isAdding) {
-        if (!patterns.audio_patterns.includes(sig)) patterns.audio_patterns.push(sig);
-        if (oldUrl) {
-           const oldSig = getStreamSignature(oldUrl);
-           if (oldSig) patterns.audio_patterns = patterns.audio_patterns.filter(p => p !== oldSig);
-        }
-      } else {
-        patterns.audio_patterns = patterns.audio_patterns.filter(p => p !== sig);
-      }
-    }
+    if (oldUrl) patterns = StreamLearning.recordFeedback(patterns, 'audio', oldUrl, -1);
+    patterns = StreamLearning.recordFeedback(patterns, 'audio', url, isAdding ? 1 : -1);
     chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns });
   });
 }
@@ -1252,7 +1213,7 @@ function loadTaskStreamsPage() {
     btnStreamsActivate.onclick = () => { toggleActiveSessionInStreams(task.id); };
     
     const renderTask = getScopedTaskForRendering(task);
-    renderGroupedStreams(renderTask, result.learned_patterns);
+    renderGroupedStreams(renderTask, result.learned_patterns, tasks);
   });
 }
 
@@ -1451,7 +1412,7 @@ function processRawStreams(rawUrls, task) {
     };
 }
 
-function renderGroupedStreams(task, patterns = {}) {
+function renderGroupedStreams(task, patterns = {}, learningTasks = scannedTasks) {
   if (!streamsListContainer) return;
   streamsListContainer.innerHTML = '';
   
@@ -1473,8 +1434,7 @@ function renderGroupedStreams(task, patterns = {}) {
   const favoritesList = task.favorites || [];
   const favoriteItems = [];
   const recommendedItems = [];
-  const videoPatterns = patterns.video_patterns || [];
-  const audioPatterns = patterns.audio_patterns || [];
+  const learnedPatterns = StreamLearning.migratePatterns(patterns, learningTasks);
 
   // Filter and extract favorites and recommendations from video streams
   for (const res in itemsByRes) {
@@ -1482,19 +1442,35 @@ function renderGroupedStreams(task, patterns = {}) {
       const targetUrl = item.videoUrl || item.audioUrl;
       const isTagged = (task.taggedVideoUrl === targetUrl) || (task.taggedAudioUrl === targetUrl);
       
-      const isRecommended = isTagged;
+      const favoriteRecommendation = StreamLearning.getRecommendation(
+        targetUrl,
+        learnedPatterns,
+        'favorite'
+      );
+      const videoRecommendation = StreamLearning.getRecommendation(
+        targetUrl,
+        learnedPatterns,
+        'video'
+      );
+      const isRecommended = isTagged
+        || favoriteRecommendation.recommended
+        || videoRecommendation.recommended;
 
       if (favoritesList.includes(targetUrl)) {
         favoriteItems.push(item);
         return false; // remove from original category
       }
       if (isRecommended) {
+        item.recommendationScore = isTagged
+          ? Number.MAX_SAFE_INTEGER
+          : Math.max(favoriteRecommendation.score, videoRecommendation.score);
         recommendedItems.push(item);
         return false; // remove from original category
       }
       return true;
     });
   }
+  recommendedItems.sort((first, second) => second.recommendationScore - first.recommendationScore);
 
   const categories = [
     { id: 'res-favorites', title: '★ Favorite Streams', items: favoriteItems, color: 'text-amber-400', badgeBg: 'bg-amber-950/80 border-amber-800/40 text-amber-400 font-bold' },
