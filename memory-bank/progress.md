@@ -36,6 +36,9 @@ Last verified: 2026-07-29
 - Capture-card layout and hierarchy repaired (`334b617`).
 - Deployment-page choices retained per task/episode/source and saved deployment (`1fb1fd7`).
 - Button colors normalized to semantic Ember roles across popup, player, reader, and dynamic states (`0738f0e`).
+- Skip-marker status and manual fallback controls aligned with the shared Ember
+  form, inline-primary, destructive, current-color icon, and flat-row contracts
+  (`15a5f19`).
 - Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
 
 ### Project workflow
@@ -59,6 +62,9 @@ Last verified: 2026-07-29
   failure, manual add, invalid range, and removal states.
 - Direct manual-marker conversion check from `00:01:30`-`00:02:45` to
   `90000`-`165000` internal milliseconds and `90`-`165` payload seconds.
+- Computed-style and 410 × 600 browser checks for the themed add, remove,
+  retry, form-control, empty, ready, and error states with no horizontal
+  overflow.
 
 ## Next candidates
 

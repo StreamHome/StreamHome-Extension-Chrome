@@ -6,6 +6,9 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `15a5f19`: aligned the skip-marker lookup and manual fallback controls with
+  the shared Ember inline-action, primary-action, destructive-action, form,
+  typography, and flat-row presentation contracts.
 - `8bbf73c`: added manual skip-marker fallbacks in `HH:MM:SS` form when
   TheIntroDB has no markers or its lookup fails.
 - `57d15d5`: exposed TheIntroDB skip-marker lookup status and marker details
@@ -48,6 +51,10 @@ HTML/JavaScript ID and duplicate-ID checks, `git diff --check`, a direct
 conversion check (`00:01:30`-`00:02:45` to `90000`-`165000` milliseconds and
 `90`-`165` payload seconds), and browser inspection at 410 × 600 for
 TheIntroDB-ready, empty, error, manual-add, invalid-range, and remove states.
+The follow-up Ember alignment was checked through computed form/action colors,
+borders, radii, current-color icon behavior, accessible action names, flat
+marker-row geometry, and a second 410 × 600 browser pass with no horizontal
+overflow.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
