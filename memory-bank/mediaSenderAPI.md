@@ -1,6 +1,6 @@
 # StreamHome Media Sender Contract
 
-Last verified: 2026-07-22
+Last verified: 2026-07-29
 
 This document describes what the Chrome extension currently sends. It is not a complete specification of the StreamHome server.
 
@@ -19,7 +19,8 @@ The extension assembles:
 - One selected `video_url` and an optional `audio_url`.
 - Source request headers needed to replay protected or referer-bound media. Captured headers are included only when the captured video URL itself is selected, not when a custom video URL overrides it.
 - Selected subtitle tracks.
-- Optional intro and credits segments from TheIntroDB.
+- Optional intro, recap, credits, and preview segments from TheIntroDB or a
+  manual fallback when TheIntroDB is empty or unavailable.
 - Optional custom record metadata supplied in the popup.
 
 Representative current shape:
@@ -52,7 +53,17 @@ Representative current shape:
 }
 ```
 
-The fixed top-level fields are `video_url`, `audio_url`, `media_type`, `tmdb_id`, `season`, `episode`, `headers`, `quality`, `language`, `subtitles`, and `skip_markers`. Subtitle entries contain `language` and `url`. TheIntroDB values are accepted in either second-based `start`/`end` or millisecond `start_ms`/`end_ms` form, rounded to two decimal seconds, and normalized into the four marker arrays.
+The fixed top-level fields are `video_url`, `audio_url`, `media_type`,
+`tmdb_id`, `season`, `episode`, `headers`, `quality`, `language`, `subtitles`,
+and `skip_markers`. Subtitle entries contain `language` and `url`. TheIntroDB
+values are accepted in either second-based `start`/`end` or millisecond
+`start_ms`/`end_ms` form, rounded to two decimal seconds, and normalized into
+the four marker arrays.
+
+Manual marker input uses `HH:MM:SS` in the popup. The deployment draft stores
+the parsed range as `start_ms` / `end_ms`; submission converts those values to
+the same second-based `start` / `end` wire shape shown above. A non-empty
+TheIntroDB result is sent instead of the manual fallback.
 
 ## Movie compatibility note
 

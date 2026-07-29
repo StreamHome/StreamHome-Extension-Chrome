@@ -1,11 +1,15 @@
 # Active Context
 
-Last verified: 2026-07-28
+Last verified: 2026-07-29
 
 ## Current state
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `8bbf73c`: added manual skip-marker fallbacks in `HH:MM:SS` form when
+  TheIntroDB has no markers or its lookup fails.
+- `57d15d5`: exposed TheIntroDB skip-marker lookup status and marker details
+  before deployment.
 - `f4766fa`: required explicit user authorization, planning, atomic commits,
   immediate pushes, and a separate memory-bank update after repository changes.
 - `0738f0e`: aligned primary, secondary, destructive, inline, toggle, stream-action, loading, and success button colors with the Ember palette.
@@ -24,12 +28,27 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
 - HLS, DASH, direct media, and subtitle requests are detected from network traffic. Chunk/static asset requests and non-success responses are ignored.
 - Series streams are stored per episode so navigating between episodes does not leak streams across episode boundaries.
 - Preview playback supports HLS.js, dash.js, and direct media. Subtitle preview uses the dedicated reader surface.
-- Deployment drafts remember quality, language, audio, custom paths, subtitle additions and selections, pending subtitle fields, and episodic values. The active deployment surface can be restored after the popup closes.
+- The deployment surface shows TheIntroDB lookup progress, found marker ranges,
+  empty results, and recoverable errors before submission.
+- If TheIntroDB has no markers or its lookup fails, users can add intro, recap,
+  credits, or preview ranges as `HH:MM:SS`. Manual ranges are stored in
+  milliseconds in the deployment draft and converted to the server's
+  second-based `start` / `end` payload at submission. Found TheIntroDB markers
+  take precedence over the manual fallback.
+- Deployment drafts remember quality, language, audio, custom paths, subtitle
+  additions and selections, pending subtitle fields, episodic values, manual
+  skip markers, and pending manual marker input. The active deployment surface
+  can be restored after the popup closes.
 - Active credentials are mirrored between localhost cookies and `chrome.storage.local`. Logout removes only active credentials and retains their values under draft keys for the next popup session without automatically reconnecting.
 
 ## Validation baseline
 
-The latest frontend changes passed the Tailwind build, JavaScript syntax checks, CSS parsing, DOM ID contract checks, browser inspection at the real 410 × 600 popup size, computed button/icon color checks across popup/player/reader, and mocked deployment-draft save/restore checks. The repository does not yet have an automated test suite.
+The latest skip-marker changes passed `node --check popup.js`,
+HTML/JavaScript ID and duplicate-ID checks, `git diff --check`, a direct
+conversion check (`00:01:30`-`00:02:45` to `90000`-`165000` milliseconds and
+`90`-`165` payload seconds), and browser inspection at 410 × 600 for
+TheIntroDB-ready, empty, error, manual-add, invalid-range, and remove states.
+The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
 user authorization before acting, maintain a plan, commit each logical change,

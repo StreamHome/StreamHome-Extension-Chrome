@@ -1,6 +1,6 @@
 # System Patterns
 
-Last verified: 2026-07-28
+Last verified: 2026-07-29
 
 ## Runtime architecture
 
@@ -42,7 +42,13 @@ Logout first writes drafts, then removes credential cookies and active keys. Dra
 
 The deployment surface is reconstructed from captured task or saved-record data, then a matching draft is applied. Task context keys include media type, task ID, season, episode, and a stable hash of the selected source. Saved deployments use their record ID. This prevents a quality, language, audio, path, or subtitle choice from bleeding into a different deployment.
 
-Drafts retain the selected quality and audio, language, custom video/audio values, available and checked subtitles, pending subtitle inputs, and season/episode fields. `activeDeploymentKey` lets startup reopen a task draft or saved deployment after the popup closes. When leaving or submitting a saved deployment, its underlying `custom_records` write is awaited before the next action reads it.
+Drafts retain the selected quality and audio, language, custom video/audio
+values, available and checked subtitles, pending subtitle inputs,
+season/episode fields, normalized manual skip markers, and pending manual
+marker inputs. Manual ranges use `start_ms` / `end_ms` internally.
+`activeDeploymentKey` lets startup reopen a task draft or saved deployment
+after the popup closes. When leaving or submitting a saved deployment, its
+underlying `custom_records` write is awaited before the next action reads it.
 
 ## Preview request headers
 
@@ -58,7 +64,20 @@ Critical popup geometry is expressed with valid Tailwind utilities plus explicit
 
 ## Deployment boundary
 
-The popup combines TMDB metadata, selected captured sources, request headers, subtitles, and optional skip markers, then posts them to the configured StreamHome ingestion endpoint. Errors remain recoverable; captured tasks are retained for retry.
+The popup combines TMDB metadata, selected captured sources, request headers,
+subtitles, and optional skip markers, then posts them to the configured
+StreamHome ingestion endpoint. It starts TheIntroDB lookup when the deployment
+surface opens and renders loading, ready, empty, or error state with marker
+details.
+
+When TheIntroDB is empty or unavailable, the manual fallback accepts intro,
+recap, credits, or preview ranges in `HH:MM:SS`. Input is validated so both
+times are present, minutes and seconds are within range, the end is later than
+the start, and exact duplicates are rejected. Values are stored as
+milliseconds, scoped with the deployment draft, and converted through the
+existing skip-marker normalization to second-based `start` / `end` fields at
+submission. Non-empty TheIntroDB results take precedence over saved manual
+markers. Errors remain recoverable; captured tasks are retained for retry.
 
 ## Verification pattern
 

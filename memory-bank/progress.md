@@ -1,6 +1,6 @@
 # Progress
 
-Last verified: 2026-07-28
+Last verified: 2026-07-29
 
 ## Completed
 
@@ -17,7 +17,10 @@ Last verified: 2026-07-28
 
 - TMDB movie, TV, season, and episode discovery, including Season 0.
 - Custom record flow.
-- TheIntroDB skip-segment lookup and second-based normalization.
+- Pre-deployment TheIntroDB skip-marker status and range details (`57d15d5`).
+- Manual intro, recap, credits, and preview fallbacks when TheIntroDB is empty
+  or unavailable, entered as `HH:MM:SS`, stored as milliseconds, retained in
+  the deployment draft, and normalized to payload seconds (`8bbf73c`).
 - Stream quality selection, subtitle selection, and StreamHome ingestion.
 
 ### Preview surfaces
@@ -52,6 +55,10 @@ Last verified: 2026-07-28
 - Mocked logout storage contract.
 - Mocked deployment-draft persistence, restoration, context isolation, and saved-record write ordering.
 - Rendered computed-color audit confirming matching button/SVG foregrounds and consistent popup/player/reader button surfaces.
+- Skip-marker UI inspection at 410 × 600 for TheIntroDB-ready, empty, lookup
+  failure, manual add, invalid range, and removal states.
+- Direct manual-marker conversion check from `00:01:30`-`00:02:45` to
+  `90000`-`165000` internal milliseconds and `90`-`165` payload seconds.
 
 ## Next candidates
 
