@@ -99,6 +99,21 @@ language with a verification warning; unknown tracks remain Unknown. Checked
 state survives rerender, and detected, verified, corrected, uncertain, and
 unavailable states use semantic Ember styling.
 
+Subtitle selection is compatibility-gated. Tracks remain unchecked while their
+content check is pending. A successful verified, corrected, or detected result
+applies a default selection exactly once and records
+`defaultSelectionApplied`. A short, low-confidence, unavailable, or unsupported
+track records `isBroken` and `brokenReason`, is rendered with the semantic
+Broken state, and has its checkbox disabled. Broken or disabled tracks are
+excluded defensively from draft selection, saved custom records, and deployment
+payload construction.
+
+The one-time default separates automatic policy from user intent. Once a
+compatible track has received its default, later rerenders preserve the
+currently checked URLs without automatically reselecting a track the user
+unchecked. Deployment drafts persist compatibility and default-selection
+metadata together with the selected URL set.
+
 ## Deployment boundary
 
 The popup combines TMDB metadata, selected captured sources, request headers,

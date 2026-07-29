@@ -53,6 +53,10 @@ Last verified: 2026-07-29
   declared language, with matching declarations verified, mismatches corrected
   for display and deployment, and original declaration metadata preserved
   (`6ce8af1`).
+- Compatible tracks activated once by default after verification; uncertain,
+  unavailable, and unsupported tracks persisted and disabled as Broken, with
+  manual deselections preserved and broken tracks excluded from deployment
+  (`7b3c31b`).
 - Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
 
 ### Project workflow
@@ -105,6 +109,13 @@ Last verified: 2026-07-29
   source. Draft serialization and deployment payload checks used corrected
   `en` and detected `pt`; the list had no nested or horizontal overflow and no
   runtime errors.
+- Compatible-selection browser verification confirmed seven compatible base
+  tracks auto-selected, two failed checks disabled as Broken, and a compatible
+  custom correction auto-selected without reselecting a manually unchecked
+  English track. Drafts persisted broken reasons and default-selection state,
+  selected URLs excluded broken tracks, the deployment payload contained only
+  the seven still-selected compatible tracks, and the ten-row list had no
+  nested or horizontal overflow or runtime errors.
 
 ## Next candidates
 

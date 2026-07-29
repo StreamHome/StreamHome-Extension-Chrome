@@ -78,3 +78,13 @@ language for display and deployment; unknown tracks are detected. The original
 label, URL, declared language, and declaration source are preserved. An
 uncertain or unavailable check never overwrites a known declaration and never
 guesses an unknown language.
+
+## 16. Activate only compatible subtitles by default
+
+A subtitle is not selected while its content check is pending. Verified,
+corrected, and detected tracks are compatible and receive a one-time automatic
+selection. Short, low-confidence, unavailable, and unsupported tracks are
+persisted as Broken, disabled in the checklist, and excluded from draft
+selection, saved records, and deployment payloads. `defaultSelectionApplied`
+ensures the automatic policy runs once; afterward, a user's manual deselection
+remains authoritative across asynchronous rerenders and popup restoration.

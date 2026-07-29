@@ -6,6 +6,10 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `7b3c31b`: made compatible subtitle tracks active by default after successful
+  content verification, persisted broken results, disabled broken selections,
+  and excluded them from draft selections, saved records, and deployment
+  payloads.
 - `6ce8af1`: extended content-language analysis to every downloadable subtitle
   track, showing verified matches, correcting mismatches, and retaining the
   original declared language and source in deployment drafts.
@@ -58,6 +62,12 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   Low-confidence or inaccessible known tracks keep their declared language
   with an explicit verification warning, while unknown tracks remain Unknown
   rather than accepting a guess.
+  Pending tracks remain inactive. Verified, corrected, or detected tracks
+  receive a one-time default selection after their check succeeds. Uncertain,
+  unavailable, or unsupported tracks are persisted as Broken, rendered with
+  the Ember error treatment, disabled, and excluded from selection and
+  deployment. A user's later manual deselection is retained across subsequent
+  subtitle rerenders and draft persistence.
   Sampling uses a URL-scoped request-header rule limited to service-worker
   requests, includes source credentials, and falls back from a bounded Range
   request to a bounded full response so URLs that work in the reader are also
@@ -121,6 +131,17 @@ Spanish track containing Portuguese was corrected while retaining
 corrected `en` and detected `pt` payload languages. Nine rows retained equal
 client/content heights, visible overflow, no horizontal overflow, and no
 runtime errors.
+The compatible-selection follow-up passed `node --check popup.js`,
+HTML/JavaScript ID-contract and duplicate-ID checks, `git diff --check`, and a
+410 × 600 browser scenario. Seven compatible base tracks were checked
+automatically; uncertain Italian and unavailable Russian tracks were labeled
+Broken, disabled, and unchecked. Manually unchecking English remained
+effective after a compatible custom Portuguese correction completed and
+auto-selected. Draft serialization persisted both broken reasons and the
+one-time default state, omitted broken URLs from `selectedSubtitleUrls`, and
+retained the manual deselection. The deployment payload contained only the
+seven still-selected compatible tracks. Ten rows retained equal client/content
+heights, visible overflow, no horizontal overflow, and no runtime errors.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
