@@ -279,11 +279,11 @@ async function cleanExpiredHeaders() {
     } catch (e) {
       console.error("[DEBUG] Error cleaning session storage:", e);
     }
-  } else {
-    for (const [requestId, data] of activeRequestHeaders.entries()) {
-      if (now - data.timestamp > 300000) {
-        activeRequestHeaders.delete(requestId);
-      }
+  }
+
+  for (const [requestId, data] of activeRequestHeaders.entries()) {
+    if (now - data.timestamp > 300000) {
+      activeRequestHeaders.delete(requestId);
     }
   }
 }
@@ -300,24 +300,31 @@ if (typeof chrome !== 'undefined' && chrome.webRequest) {
     async (details) => {
       if (details.requestHeaders) {
         const isInternal = details.requestHeaders.some(h => h.name.toLowerCase() === 'x-streamhome-sniffer');
-        if (isInternal) return;
+        const requestRecord = {
+          timestamp: Date.now(),
+          headers: isInternal ? [] : details.requestHeaders,
+          internal: isInternal
+        };
+
+        // Keep an immediate in-memory marker so a fast internal response cannot
+        // race the asynchronous session-storage write.
+        if (isInternal) {
+          activeRequestHeaders.set(details.requestId, requestRecord);
+        }
 
         if (chrome.storage && chrome.storage.session) {
           try {
             await chrome.storage.session.set({
-              [details.requestId]: {
-                timestamp: Date.now(),
-                headers: details.requestHeaders
-              }
+              [details.requestId]: requestRecord
             });
+            if (isInternal && !activeRequestHeaders.has(details.requestId)) {
+              await chrome.storage.session.remove(details.requestId);
+            }
           } catch (e) {
             console.error("[DEBUG] Session storage set error:", e);
           }
         } else {
-          activeRequestHeaders.set(details.requestId, {
-            timestamp: Date.now(),
-            headers: details.requestHeaders
-          });
+          activeRequestHeaders.set(details.requestId, requestRecord);
         }
       }
     },
@@ -349,24 +356,29 @@ if (typeof chrome !== 'undefined' && chrome.webRequest) {
 
       // Asynchronously retrieve request headers
       let requestHeaders = null;
+      let isInternalRequest = false;
+      const memoryRequest = activeRequestHeaders.get(details.requestId);
+      if (memoryRequest) {
+        requestHeaders = memoryRequest.headers;
+        isInternalRequest = memoryRequest.internal === true;
+        activeRequestHeaders.delete(details.requestId);
+      }
+
       if (chrome.storage && chrome.storage.session) {
         try {
           const res = await chrome.storage.session.get(details.requestId);
           const savedRequest = res[details.requestId];
           if (savedRequest) {
             requestHeaders = savedRequest.headers;
+            isInternalRequest = isInternalRequest || savedRequest.internal === true;
             await chrome.storage.session.remove(details.requestId);
           }
         } catch (e) {
           console.error("[DEBUG] Session storage get error:", e);
         }
-      } else {
-        const savedRequest = activeRequestHeaders.get(details.requestId);
-        if (savedRequest) {
-          requestHeaders = savedRequest.headers;
-          activeRequestHeaders.delete(details.requestId);
-        }
       }
+
+      if (isInternalRequest) return;
 
       const responseHeaders = {};
       if (details.responseHeaders) {
