@@ -6,6 +6,9 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `3905eb8`: kept extension-owned subtitle and manifest fetches marked as
+  internal through response correlation, preventing movie-review subtitle
+  verification from entering a different movie's active listening task.
 - `0110b59`: limited Recommended Streams to one highest-confidence source,
   preferring an explicit video tag and resolving equal learned scores by stable
   capture order while leaving losing candidates in their normal categories.
@@ -51,6 +54,13 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
 - The popup is a fixed 410 × 600 workspace with Ember colors, terminal-style geometry, keyboard-accessible task cards, and consistent loading/empty/error states.
 - Buttons use semantic Ember roles rather than legacy cyan/purple/slate utilities. Nested SVGs inherit their button foreground, destructive actions use the Ember error treatment, and deployment loading/success states have explicit visual contracts.
 - Capture is limited to the selected task and the tab that started listening. A second gate runs after asynchronous manifest work to prevent late writes.
+- Subtitle-language samples and manifest inspections initiated by the extension
+  carry an internal request marker. That marker is correlated by request ID in
+  session storage with an immediate in-memory race guard, consumed at response
+  start, and rejected before media classification. Opening or reviewing another
+  movie therefore cannot add its internally fetched subtitles to the active
+  listening task, while unmarked site service-worker requests remain eligible
+  for the normal capture gates.
 - HLS, DASH, direct media, and subtitle requests are detected from network traffic. Chunk/static asset requests and non-success responses are ignored.
 - Favorites and manual video/audio tags train a shared local recommendation
   model. It compares stable URL structure such as normalized CDN families,
@@ -175,6 +185,13 @@ highest-score result was selected. Equal scores retained the first captured
 candidate, an explicit video tag outranked learned candidates, and empty or
 invalid candidate collections produced no recommendation. The browser's
 existing local-`file:` restriction still prevented visual popup inspection.
+The internal-request isolation follow-up passed `node --check background.js`
+and `git diff --check`. A mocked webRequest harness confirmed that marked
+subtitle requests are rejected before active-task storage access with both
+session storage and the in-memory fallback, while an unmarked `tabId: -1`
+service-worker subtitle request still reaches the normal capture gate. A
+delayed session-write scenario also confirmed that the synchronous memory guard
+blocks a fast response and that the late write leaves no stale marker.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear

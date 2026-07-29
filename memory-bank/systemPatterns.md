@@ -18,13 +18,19 @@ There are no content scripts. The capture pipeline observes browser network meta
 ## Capture flow
 
 1. `onSendHeaders` records relevant request headers by request ID in `chrome.storage.session`, with an in-memory fallback.
-2. `onResponseStarted` rejects OPTIONS, non-2xx responses, chunks, and unrelated static resources.
-3. A storage gate verifies that a capture task is active and that the sender tab owns it.
-4. The response is classified as HLS, DASH, direct media, or subtitle. Manifests may be fetched and parsed asynchronously.
-5. The task/tab gate runs again after asynchronous work.
-6. A serialized mutation updates the correct task and, for TV, the correct episode collection.
+2. Extension-owned fetches are recorded with an internal marker and rejected at
+   response start before classification. An immediate in-memory copy closes
+   the race before the asynchronous session-storage write completes.
+3. `onResponseStarted` rejects OPTIONS, non-2xx responses, chunks, and unrelated static resources.
+4. A storage gate verifies that a capture task is active and that the sender tab owns it.
+5. The response is classified as HLS, DASH, direct media, or subtitle. Manifests may be fetched and parsed asynchronously.
+6. The task/tab gate runs again after asynchronous work.
+7. A serialized mutation updates the correct task and, for TV, the correct episode collection.
 
 This double-gate pattern is required because a response can finish after the user stops listening or switches tasks.
+The internal-marker boundary is separately required because extension
+service-worker fetches have `tabId: -1`, which is also valid for website
+service-worker traffic and therefore cannot be rejected by tab ID alone.
 
 ## Task state
 

@@ -112,3 +112,16 @@ only one winner into Recommended Streams. Explicit video and audio tags remain
 stronger signals than learned similarity; otherwise the highest learned score
 wins. Equal scores keep the first captured source for deterministic behavior,
 and every losing candidate remains visible in its normal quality category.
+
+## 19. Correlate and reject extension-owned media fetches
+
+Extension subtitle verification and manifest inspection fetch external media
+while a user may be listening for another movie. Chrome reports these
+service-worker responses with `tabId: -1`, the same shape used by legitimate
+website service-worker traffic, so rejecting every no-tab request would break
+capture. The existing `X-StreamHome-Sniffer` request marker must instead survive
+request correlation. Internal records are persisted in session storage and
+also placed in memory immediately to close the asynchronous-write race.
+`onResponseStarted` consumes the record and returns before media
+classification. Unmarked no-tab traffic continues through the normal active
+task and tab gates.

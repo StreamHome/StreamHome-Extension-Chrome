@@ -10,6 +10,9 @@ Last verified: 2026-07-29
 - Header correlation with session-storage and in-memory fallback.
 - OPTIONS, unsuccessful response, chunk, and static-resource filtering.
 - Pre- and post-fetch task/tab gates for stale and prefetched requests.
+- Extension-owned subtitle and manifest fetches correlated and rejected before
+  media classification, including fast `tabId: -1` responses, without blocking
+  legitimate website service-worker capture (`3905eb8`).
 - Serialized task writes and episode-scoped series streams.
 - Shared v2 structural URL learning for favorites and manual video/audio tags,
   with task-history migration, repeated-evidence counts, scored recommendation
@@ -136,6 +139,12 @@ Last verified: 2026-07-29
   invalid or empty collections returned no winner, syntax checks passed, and
   `git diff --check` was clean. The existing local-`file:` browser restriction
   again prevented visual popup inspection.
+- Internal-request isolation checks confirmed that marked subtitle responses
+  never reach active-task storage through either session correlation or the
+  in-memory fallback. An unmarked `tabId: -1` subtitle response still reached
+  the normal capture gate, and a deliberately delayed session write neither
+  leaked the fast internal response nor left a stale marker. Background syntax
+  and `git diff --check` passed.
 
 ## Next candidates
 
