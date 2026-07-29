@@ -6,6 +6,9 @@ Last verified: 2026-07-29
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `66f4068`: fixed content-language detection for protected subtitle URLs by
+  applying captured request headers through a temporary service-worker rule
+  and retrying without Range when a source rejects ranged requests.
 - `f30fac1`: added content-based language detection for unknown subtitle
   tracks, with bounded authenticated sampling, confidence thresholds, explicit
   Ember status text, draft persistence, and deployment payload integration.
@@ -48,6 +51,10 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   language plus confidence; the original label and URL remain unchanged.
   Short, low-confidence, unsupported, or inaccessible samples stay Unknown
   with an explicit uncertain or unavailable status rather than a guess.
+  Sampling uses a URL-scoped request-header rule limited to service-worker
+  requests, includes source credentials, and falls back from a bounded Range
+  request to a bounded full response so URLs that work in the reader are also
+  available to detection. The temporary rule is always removed afterward.
 - The deployment surface shows TheIntroDB lookup progress, found marker ranges,
   empty results, and recoverable errors before submission.
 - If TheIntroDB has no markers or its lookup fails, users can add intro, recap,
@@ -88,6 +95,12 @@ label while persisting `tr`, its detected source, and confidence; a selected
 track produced `{ language: "tr", url }` in the deployment payload. A direct
 background harness confirmed the 128 KiB range cap, captured-header reuse, and
 safe rejection of unsupported URLs.
+The protected-source follow-up reproduced a Portuguese VTT requiring captured
+Referer, Origin, User-Agent, Cookie, and Authorization headers while rejecting
+Range. Detection retrieval succeeded through the full-request fallback, still
+capped the sample at 128 KiB, retained genuine HTTP 403 and unsupported-URL
+failures, and left no temporary request-header rules installed. JavaScript
+syntax, deployment-context guards, and `git diff --check` also passed.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear

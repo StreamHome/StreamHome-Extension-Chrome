@@ -74,9 +74,16 @@ URL-derived and manually assigned subtitle languages are authoritative and are
 not re-detected. For an Unknown HTTP(S) track, the popup asks the background
 service worker for at most 128 KiB of subtitle text. The fetch can reuse the
 captured Referer, Origin, User-Agent, Cookie, and Authorization headers, uses a
-seven-second timeout, and rejects unsupported URL schemes. The popup removes
-cue timing, indices, markup, and format metadata before passing dialogue text
-to `chrome.i18n.detectLanguage`.
+seven-second timeout, and rejects unsupported URL schemes. Captured headers are
+applied with a temporary session rule scoped to requests without a tab,
+matching the service-worker fetch without affecting normal tab traffic. The
+rule uses an exact URL for normal-length filters and a source-host fallback
+only when the URL is too long for Chrome's regular-expression rule limit. The
+fetch includes credentials, attempts the bounded Range request first, then
+retries without Range when the source rejects or fails that request. Streaming
+still stops after 128 KiB, and the temporary rule is removed in all completion
+paths. The popup removes cue timing, indices, markup, and format metadata before
+passing dialogue text to `chrome.i18n.detectLanguage`.
 
 A result is accepted only when the sample has at least 80 dialogue characters
 and the leading language reaches 50% for a reliable detector result or 85% for

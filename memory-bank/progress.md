@@ -46,6 +46,9 @@ Last verified: 2026-07-29
   their original label or URL; confident language metadata is persisted and
   submitted, while uncertain or unavailable tracks remain explicitly Unknown
   (`f30fac1`).
+- Protected subtitle detection aligned with the working reader request path by
+  applying captured headers in a temporary service-worker rule and retrying
+  without Range when necessary (`66f4068`).
 - Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
 
 ### Project workflow
@@ -86,6 +89,11 @@ Last verified: 2026-07-29
 - Bounded-fetch verification confirmed a `bytes=0-131071` request, a 128 KiB
   maximum sample, captured authorization-header reuse, and rejection of
   unsupported URL schemes.
+- Protected Portuguese VTT verification required captured Referer, Origin,
+  User-Agent, Cookie, and Authorization values, rejected the initial Range
+  request, succeeded through the full-request fallback, enforced the 128 KiB
+  cap, preserved true HTTP 403 and unsupported-URL failures, and confirmed
+  temporary request-header rule cleanup.
 
 ## Next candidates
 

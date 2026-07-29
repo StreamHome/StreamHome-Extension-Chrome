@@ -67,9 +67,12 @@ acting.
 
 Languages supplied manually or inferred from a subtitle URL remain
 authoritative. For Unknown HTTP(S) tracks, the background worker fetches a
-bounded 128 KiB sample with a timeout and can reuse captured source headers.
-The popup strips subtitle formatting and uses Chrome's native language
-detector. It accepts only sufficiently long, confident results, scopes async
-completion to the active deployment, and otherwise leaves the language
-Unknown with an explicit reason. A successful detection changes language
-metadata only; the original track label and URL are preserved.
+bounded 128 KiB sample with a timeout. Protected URLs receive captured source
+headers through a temporary URL-scoped rule limited to requests without a tab;
+the worker tries Range first and falls back to a credentialed full request
+while preserving the byte cap, then removes the rule. The popup strips
+subtitle formatting and uses Chrome's native language detector. It accepts
+only sufficiently long, confident results, scopes async completion to the
+active deployment, and otherwise leaves the language Unknown with an explicit
+reason. A successful detection changes language metadata only; the original
+track label and URL are preserved.
