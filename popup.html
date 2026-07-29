@@ -386,7 +386,12 @@
               <input id="manual-skip-marker-end" type="text" inputmode="numeric" autocomplete="off" placeholder="00:00:00" aria-describedby="manual-skip-markers-hint manual-skip-markers-error" />
             </label>
           </div>
-          <button id="btn-add-manual-skip-marker" type="button" class="ember-inline-action manual-skip-marker-add">Add marker</button>
+          <button id="btn-add-manual-skip-marker" type="button" class="ember-inline-action ember-inline-action--primary manual-skip-marker-add">
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="square" stroke-linejoin="miter" stroke-width="2" d="M12 5v14M5 12h14" />
+            </svg>
+            <span>Add marker</span>
+          </button>
           <p id="manual-skip-markers-error" class="manual-skip-markers-error" role="alert" hidden></p>
           <div id="manual-skip-markers-list" class="manual-skip-markers-list"></div>
         </div>

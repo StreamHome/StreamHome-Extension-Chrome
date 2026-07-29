@@ -2850,7 +2850,7 @@ function renderManualSkipMarkerEditor(status) {
 
     const removeButton = document.createElement('button');
     removeButton.type = 'button';
-    removeButton.className = 'ember-inline-action manual-skip-marker-remove';
+    removeButton.className = 'ember-inline-action ember-inline-action--danger manual-skip-marker-remove';
     removeButton.textContent = 'Remove';
     removeButton.setAttribute('aria-label', `Remove ${marker.type} marker ${range.textContent}`);
     removeButton.addEventListener('click', () => removeManualSkipMarker(index));
