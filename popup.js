@@ -24,6 +24,17 @@ let manualSkipMarkers = [];
 
 const DEPLOYMENT_DRAFT_PREFIX = 'deploymentDraft:';
 const SKIP_MARKER_TYPES = ['intro', 'recap', 'credits', 'preview'];
+const VIDEO_QUALITY_OPTIONS = Object.freeze([
+  '4K',
+  '2K',
+  '1080p',
+  '720p',
+  '480p',
+  '360p',
+  '240p',
+  '144p'
+]);
+const DEFAULT_VIDEO_QUALITY = '1080p';
 const LANGUAGE_NAMES = Object.freeze({
   en: 'English',
   tr: 'Turkish',
@@ -540,7 +551,7 @@ function collectDeploymentDraft() {
   if (!activeDeploymentKey || !currentTaskContext) return null;
 
   const selectedAudio = audioSelector ? audioSelector.value : (selectedAudioUrl || '');
-  const quality = qualitySelector ? qualitySelector.value : selectedQuality;
+  const quality = getCurrentVideoQuality();
 
   return {
     version: 2,
@@ -551,7 +562,7 @@ function collectDeploymentDraft() {
     currentStreamItem: currentStreamItem || null,
     selectedStreamUrl: selectedStreamUrl || '',
     selectedAudioUrl: selectedAudio || '',
-    selectedQuality: quality || 'Unknown',
+    selectedQuality: quality,
     language: languageSelector ? languageSelector.value : 'en',
     customVideo: customVideoInput ? customVideoInput.value : '',
     customAudio: customAudioInput ? customAudioInput.value : '',
@@ -621,11 +632,7 @@ function applyDeploymentDraft(draft) {
     if (inputCustomSubUrl) inputCustomSubUrl.value = draft.pendingSubtitleUrl || '';
     if (inputCustomSubLang) inputCustomSubLang.value = draft.pendingSubtitleLanguage || '';
 
-    if (qualitySelector) {
-      addSelectOptionIfMissing(qualitySelector, draft.selectedQuality);
-      qualitySelector.value = draft.selectedQuality || qualitySelector.value;
-      selectedQuality = qualitySelector.value || 'Unknown';
-    }
+    if (qualitySelector) setSelectedVideoQuality(draft.selectedQuality);
 
     if (audioSelector) {
       const audioExists = Array.from(audioSelector.options).some((option) => option.value === draft.selectedAudioUrl);
@@ -1708,26 +1715,8 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, res
     deployEpisodicInputsWrapper.classList.add('hidden');
   }
 
-  populateQualitySelector(selectedStreamUrl, task);
-  
-  if (qualitySelector.options.length > 0) {
-    const initialQuality = String(selectedItem.quality || 'Unknown');
-    let matchingIndex = -1;
-    for (let i = 0; i < qualitySelector.options.length; i++) {
-      if (qualitySelector.options[i].value.toLowerCase().includes(initialQuality.toLowerCase())) {
-        matchingIndex = i;
-        break;
-      }
-    }
-    if (matchingIndex !== -1) {
-      qualitySelector.selectedIndex = matchingIndex;
-    } else {
-      qualitySelector.selectedIndex = 0;
-    }
-    selectedQuality = qualitySelector.value;
-  } else {
-    selectedQuality = 'Unknown';
-  }
+  populateQualitySelector();
+  setSelectedVideoQuality(selectedItem.quality);
 
   populateAudioSelector();
   const preferredAudioExists = Array.from(audioSelector.options).some((option) => option.value === preferredAudioUrl);
@@ -1754,28 +1743,50 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, res
   }
 }
 
-function populateQualitySelector(url, task) {
-    qualitySelector.innerHTML = '';
-    let qualities = ['4K (2160p)', '1080p', '720p', '480p', '360p', 'HLS / M3U8', 'DASH / MPD', 'Progressive MP4', 'Unknown'];
-    
-    if (task && task.streamQualities && task.streamQualities[url]) {
-      const list = task.streamQualities[url];
-      if (list && list.length > 0) {
-        qualities = list;
-      }
-    }
+function normalizeVideoQuality(quality) {
+  const value = String(quality || '').trim().toLowerCase();
+  if (!value) return null;
 
-    qualities.forEach(q => {
-        const option = document.createElement('option');
-        option.value = q;
-        option.textContent = q;
-        qualitySelector.appendChild(option);
-    });
+  if (/(^|\D)4k(\D|$)/.test(value) || /(^|\D)2160p?(\D|$)/.test(value)) return '4K';
+  if (/(^|\D)2k(\D|$)/.test(value) || /(^|\D)1440p?(\D|$)/.test(value)) return '2K';
+
+  for (const height of ['1080', '720', '480', '360', '240', '144']) {
+    const qualityPattern = new RegExp(`(^|\\D)${height}p?(\\D|$)`);
+    if (qualityPattern.test(value)) return `${height}p`;
+  }
+
+  return null;
+}
+
+function getCurrentVideoQuality() {
+  const selectorQuality = qualitySelector ? normalizeVideoQuality(qualitySelector.value) : null;
+  return selectorQuality || normalizeVideoQuality(selectedQuality) || DEFAULT_VIDEO_QUALITY;
+}
+
+function setSelectedVideoQuality(quality) {
+  selectedQuality = normalizeVideoQuality(quality) || DEFAULT_VIDEO_QUALITY;
+  if (qualitySelector) qualitySelector.value = selectedQuality;
+  return selectedQuality;
+}
+
+function populateQualitySelector() {
+  if (!qualitySelector) return;
+  const currentQuality = normalizeVideoQuality(selectedQuality) || DEFAULT_VIDEO_QUALITY;
+  qualitySelector.innerHTML = '';
+
+  VIDEO_QUALITY_OPTIONS.forEach((quality) => {
+    const option = document.createElement('option');
+    option.value = quality;
+    option.textContent = quality;
+    qualitySelector.appendChild(option);
+  });
+
+  setSelectedVideoQuality(currentQuality);
 }
 
 function onQualityChange(quality) {
-    selectedQuality = quality;
-    persistDeploymentDraft();
+  setSelectedVideoQuality(quality);
+  persistDeploymentDraft();
 }
 
 function populateAudioSelector() {
@@ -2351,7 +2362,7 @@ async function deployMetadataPayload() {
     season: null,
     episode: null,
     headers: headers || {},
-    quality: (selectedQuality && selectedQuality !== 'Unknown') ? selectedQuality : '1080p',
+    quality: getCurrentVideoQuality(),
     language: (selectedLanguage && selectedLanguage !== 'other') ? selectedLanguage : 'en',
     subtitles: selectedSubtitles
   };
@@ -2732,7 +2743,7 @@ function openCustomRecordInDeployPage(record, restoredDraft = undefined) {
 
   selectedStreamUrl = record.video_url || '';
   selectedAudioUrl = record.audio_url || '';
-  selectedQuality = record.quality || 'Unknown';
+  selectedQuality = normalizeVideoQuality(record.quality) || DEFAULT_VIDEO_QUALITY;
   availableAudios = [];
   availableVideos = {};
 
@@ -2750,23 +2761,10 @@ function openCustomRecordInDeployPage(record, restoredDraft = undefined) {
   if (inputCustomSubLang) inputCustomSubLang.value = '';
 
   populateLanguageSelector();
-  populateQualitySelector(null, null);
+  populateQualitySelector();
   populateAudioSelector();
 
-  if (qualitySelector) {
-    // Make sure option exists or add it
-    let exists = false;
-    for (let i = 0; i < qualitySelector.options.length; i++) {
-      if (qualitySelector.options[i].value === selectedQuality) exists = true;
-    }
-    if (!exists && selectedQuality) {
-      const opt = document.createElement('option');
-      opt.value = selectedQuality;
-      opt.textContent = selectedQuality;
-      qualitySelector.appendChild(opt);
-    }
-    qualitySelector.value = selectedQuality;
-  }
+  setSelectedVideoQuality(selectedQuality);
 
   if (languageSelector) {
     languageSelector.value = record.language || 'en';
@@ -2858,7 +2856,7 @@ function saveCustomRecordWithoutModal() {
 
       records[idx].video_url = finalStreamUrl;
       records[idx].audio_url = finalAudioUrl;
-      records[idx].quality = selectedQuality || 'Unknown';
+      records[idx].quality = getCurrentVideoQuality();
       records[idx].language = selectedLanguage;
       records[idx].subtitles = selectedSubtitles;
       records[idx].season = season;
@@ -3048,7 +3046,7 @@ function saveNewCustomRecord() {
       episode: 1, // default
       video_url: '',
       audio_url: '',
-      quality: '1080p',
+      quality: DEFAULT_VIDEO_QUALITY,
       language: 'en',
       subtitles: []
     };
