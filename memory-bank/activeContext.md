@@ -1,11 +1,14 @@
 # Active Context
 
-Last verified: 2026-07-29
+Last verified: 2026-08-02
 
 ## Current state
 
 The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
 
+- `4cdefaa`: replaced source-dependent quality choices with a canonical
+  `4K` through `144p` ladder, normalized detected and legacy resolution labels,
+  and persisted the selected value through drafts, saved records, and deployment.
 - `25a9fbc`: added a themed Delete action to every deployment subtitle row and
   persisted removals to task, episode, draft, or saved-record state while
   preserving unrelated tracks and media.
@@ -113,7 +116,12 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   milliseconds in the deployment draft and converted to the server's
   second-based `start` / `end` payload at submission. Found TheIntroDB markers
   take precedence over the manual fallback.
-- Deployment drafts remember quality, language, audio, custom paths, subtitle
+- The quality selector always offers `4K`, `2K`, `1080p`, `720p`, `480p`,
+  `360p`, `240p`, and `144p`. Detected `2160p` / `1440p` and legacy labels are
+  normalized to the matching choice; unknown format labels default to `1080p`.
+  The selected quality is retained in the deployment draft, saved deployment
+  record, and submitted payload.
+- Deployment drafts also remember language, audio, custom paths, subtitle
   additions and selections, pending subtitle fields, episodic values, manual
   skip markers, and pending manual marker input. The active deployment surface
   can be restored after the popup closes.
@@ -207,6 +215,14 @@ Season 0 scope propagation, deployment-draft rerendering with retained
 unrelated subtitles, and immediate saved-record persistence. The known browser
 policy still blocks local extension `file:` pages, so no visual-browser result
 is claimed for this change.
+The video-quality follow-up passed `node --check popup.js`, popup duplicate-ID
+and quality-selector contract checks, and `git diff --check`. A direct behavior
+harness confirmed the exact eight-option order, mapped `2160` / legacy
+`4K (2160p)` to `4K`, mapped `1440p` to `2K`, retained a selected `240p`, and
+defaulted non-quality format labels to `1080p`. Source inspection confirmed the
+same canonical getter feeds deployment drafts, saved custom records, and the
+ingestion payload. The known local-`file:` browser restriction prevented a new
+visual-browser claim.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear

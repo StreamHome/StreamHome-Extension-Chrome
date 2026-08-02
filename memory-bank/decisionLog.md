@@ -1,6 +1,6 @@
 # Decision Log
 
-Last verified: 2026-07-29
+Last verified: 2026-08-02
 
 ## 1. Ignore media chunks
 
@@ -136,3 +136,13 @@ captured headers, and quality metadata; using an explicit episode scope avoids
 deleting from whichever episode happens to be active later. Saved deployment
 subtitles are written back immediately. The storage operation is awaited so
 the row cannot reappear after navigation or popup restoration.
+
+## 21. Keep deployment quality canonical and user-selectable
+
+Captured resolution metadata is an initial suggestion, not a restriction on
+deployment. Every quality selector exposes one stable ladder from `4K` through
+`144p`; source-specific format labels do not replace or extend it. Detected
+`2160p` and `1440p` values and legacy labels normalize to `4K` and `2K`, while
+unrecognized labels use the `1080p` default. One canonical getter supplies the
+per-context draft, saved custom record, and ingestion payload so the user's
+selection survives restoration and is the value that is deployed.

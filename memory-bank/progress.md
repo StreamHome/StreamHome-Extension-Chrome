@@ -1,6 +1,6 @@
 # Progress
 
-Last verified: 2026-07-29
+Last verified: 2026-08-02
 
 ## Completed
 
@@ -30,7 +30,11 @@ Last verified: 2026-07-29
 - Manual intro, recap, credits, and preview fallbacks when TheIntroDB is empty
   or unavailable, entered as `HH:MM:SS`, stored as milliseconds, retained in
   the deployment draft, and normalized to payload seconds (`8bbf73c`).
-- Stream quality selection, subtitle selection, and StreamHome ingestion.
+- Canonical user-selectable quality ladder (`4K`, `2K`, `1080p`, `720p`,
+  `480p`, `360p`, `240p`, `144p`) with detected/legacy normalization and the
+  selected value persisted through deployment drafts, saved records, and
+  ingestion (`4cdefaa`).
+- Subtitle selection and StreamHome ingestion.
 
 ### Preview surfaces
 
@@ -154,6 +158,12 @@ Last verified: 2026-07-29
   syntax, CSS parsing, semantic/accessibility source checks, and
   `git diff --check` passed; the local-`file:` browser restriction prevented a
   claimed visual-browser result.
+- Video-quality checks confirmed the exact eight-option ladder, normalized
+  `2160` and legacy `4K (2160p)` to `4K`, normalized `1440p` to `2K`, retained
+  a selected `240p`, and defaulted format-only labels to `1080p`. Popup syntax,
+  duplicate-ID and selector contracts, persistence-path inspection, and
+  `git diff --check` passed. The existing local-`file:` browser restriction
+  prevented a claimed visual-browser result.
 
 ## Next candidates
 

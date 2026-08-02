@@ -1,6 +1,6 @@
 # System Patterns
 
-Last verified: 2026-07-29
+Last verified: 2026-08-02
 
 ## Runtime architecture
 
@@ -82,6 +82,12 @@ Drafts retain the selected quality and audio, language, custom video/audio
 values, available and checked subtitles, pending subtitle inputs,
 season/episode fields, normalized manual skip markers, and pending manual
 marker inputs. Manual ranges use `start_ms` / `end_ms` internally.
+Quality is user-owned and canonical: every deployment offers `4K`, `2K`,
+`1080p`, `720p`, `480p`, `360p`, `240p`, and `144p` regardless of source
+metadata. Detected heights and legacy labels normalize into those values, and
+the same selected value is used for draft restoration, saved records, and the
+deployment payload. Unrecognized source labels start at `1080p` rather than
+becoming extra selector entries.
 `activeDeploymentKey` lets startup reopen a task draft or saved deployment
 after the popup closes. When leaving or submitting a saved deployment, its
 underlying `custom_records` write is awaited before the next action reads it.
