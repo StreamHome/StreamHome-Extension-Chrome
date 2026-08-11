@@ -1,6 +1,6 @@
 # System Patterns
 
-Last verified: 2026-08-02
+Last verified: 2026-08-11
 
 ## Runtime architecture
 
@@ -9,7 +9,8 @@ The extension is a Manifest V3 application with four runtime surfaces:
 - `background.js`: service-worker capture pipeline, header correlation, manifest inspection, storage serialization, and dynamic request-header rules.
 - `stream-learning.js`: shared structural URL feature extraction, feedback
   migration, scoring, and legacy-signature compatibility.
-- `popup.html` / `popup.js`: credentials, TMDB selection, tasks, episode state, captured stream review, custom records, and deployment.
+- `popup.html` / `popup.js`: credentials, TMDB selection, tasks, episode state,
+  live captured-media selection, and deployment.
 - `player.html` / `player.js`: HLS, DASH, or direct-media preview.
 - `reader.html` / `reader.js`: subtitle fetch and preview.
 
@@ -39,7 +40,7 @@ service-worker traffic and therefore cannot be rejected by tab ID alone.
 - active capture identity: task ID and tab ID;
 - saved capture tasks and episode-scoped streams;
 - versioned learned stream examples, legacy source signatures, and favorites;
-- custom records and popup view state;
+- popup view state;
 - `activeDeploymentKey` and per-context `deploymentDraft:{contextKey}` records;
 - active credentials: `serverUrl`, `apiKey`, `tmdbApiKey`;
 - disconnected drafts: `draftServerUrl`, `draftApiKey`, `draftTmdbApiKey`.
@@ -76,7 +77,12 @@ their normal quality categories.
 
 ## Deployment drafts
 
-The deployment surface is reconstructed from captured task or saved-record data, then a matching draft is applied. Task context keys include media type, task ID, season, episode, and a stable hash of the selected source. Saved deployments use their record ID. This prevents a quality, language, audio, path, or subtitle choice from bleeding into a different deployment.
+The deployment surface is reconstructed from a captured movie or exact TV
+episode, then its matching draft is applied. Context keys include media type,
+task ID, season, and episode; they do not include an individual source URL.
+This lets a live source list change while quality, language, audio, path,
+subtitle, and manual-marker choices remain attached to the media/episode
+workspace.
 
 Drafts retain the selected quality and audio, language, custom video/audio
 values, available and checked subtitles, pending subtitle inputs,
@@ -85,12 +91,12 @@ marker inputs. Manual ranges use `start_ms` / `end_ms` internally.
 Quality is user-owned and canonical: every deployment offers `4K`, `2K`,
 `1080p`, `720p`, `480p`, `360p`, `240p`, and `144p` regardless of source
 metadata. Detected heights and legacy labels normalize into those values, and
-the same selected value is used for draft restoration, saved records, and the
-deployment payload. Unrecognized source labels start at `1080p` rather than
+the same selected value is used for draft restoration and the deployment
+payload. Unrecognized source labels start at `1080p` rather than
 becoming extra selector entries.
-`activeDeploymentKey` lets startup reopen a task draft or saved deployment
-after the popup closes. When leaving or submitting a saved deployment, its
-underlying `custom_records` write is awaited before the next action reads it.
+`activeDeploymentKey` lets startup reopen the media/episode deployment after
+the popup closes. Legacy source-specific draft keys can be read during startup
+and are persisted into the new media/episode key when the workspace opens.
 
 ## Preview request headers
 
@@ -147,16 +153,15 @@ applies a default selection exactly once and records
 `defaultSelectionApplied`. A short, low-confidence, unavailable, or unsupported
 track records `isBroken` and `brokenReason`, is rendered with the semantic
 Broken state, and has its checkbox disabled. Broken or disabled tracks are
-excluded defensively from draft selection, saved custom records, and deployment
-payload construction.
+excluded defensively from draft selection and deployment payload construction.
 
 Subtitle checklist deletion is context-owned. The popup first removes the URL
 from `availableSubtitles`, rerenders while preserving other checked URLs, and
 persists the deployment draft. For captured tasks it then removes the stream,
 favorite/tag references, captured headers, and quality metadata from the movie
-or explicitly scoped season/episode. For a saved deployment it immediately
-rewrites that custom record. Stream deletion returns a promise so subtitle
-deletion does not report completion before storage persistence finishes.
+or explicitly scoped season/episode. Stream deletion returns a promise so
+subtitle deletion does not report completion before storage persistence
+finishes.
 
 The one-time default separates automatic policy from user intent. Once a
 compatible track has received its default, later rerenders preserve the

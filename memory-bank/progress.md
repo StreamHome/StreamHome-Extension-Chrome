@@ -1,6 +1,6 @@
 # Progress
 
-Last verified: 2026-08-02
+Last verified: 2026-08-11
 
 ## Completed
 
@@ -25,15 +25,17 @@ Last verified: 2026-08-02
 ### Metadata and deployment
 
 - TMDB movie, TV, season, and episode discovery, including Season 0.
-- Custom record flow.
+- One live deployment workspace per movie or exact TV episode, with listening,
+  detected-media selection, preview, download, and ingestion in the same
+  surface (`4aa10b8`).
 - Pre-deployment TheIntroDB skip-marker status and range details (`57d15d5`).
 - Manual intro, recap, credits, and preview fallbacks when TheIntroDB is empty
   or unavailable, entered as `HH:MM:SS`, stored as milliseconds, retained in
   the deployment draft, and normalized to payload seconds (`8bbf73c`).
 - Canonical user-selectable quality ladder (`4K`, `2K`, `1080p`, `720p`,
   `480p`, `360p`, `240p`, `144p`) with detected/legacy normalization and the
-  selected value persisted through deployment drafts, saved records, and
-  ingestion (`4cdefaa`).
+  selected value persisted through deployment drafts and ingestion
+  (`4cdefaa`, with saved-record persistence retired by `4aa10b8`).
 - Subtitle selection and StreamHome ingestion.
 
 ### Preview surfaces
@@ -47,7 +49,9 @@ Last verified: 2026-08-02
 - Ember redesign across popup, player, and reader (`7fbc2da`).
 - Credential drafts retained after logout without auto-login (`a6bcf0a`).
 - Capture-card layout and hierarchy repaired (`334b617`).
-- Deployment-page choices retained per task/episode/source and saved deployment (`1fb1fd7`).
+- Deployment-page choices retained per media or exact episode while live
+  detected sources change (`4aa10b8`, superseding the source-specific portion
+  of `1fb1fd7`).
 - Button colors normalized to semantic Ember roles across popup, player, reader, and dynamic states (`0738f0e`).
 - Skip-marker status and manual fallback controls aligned with the shared Ember
   form, inline-primary, destructive, current-color icon, and flat-row contracts
@@ -71,9 +75,12 @@ Last verified: 2026-08-02
   manual deselections preserved and broken tracks excluded from deployment
   (`7b3c31b`).
 - Subtitle tracks can be deleted through a semantic Ember destructive action;
-  removals persist to the deployment draft, captured movie or exact episode,
-  and saved deployment records without removing unrelated sources (`25a9fbc`).
-- Keyboard-accessible dynamic cards, labeled controls, and modal Escape handling.
+  removals persist to the deployment draft and captured movie or exact episode
+  without removing unrelated sources (`25a9fbc`, updated by `4aa10b8`).
+- Keyboard-accessible dynamic cards and labeled controls.
+- Intermediate captured-stream review and saved-deployment/custom-record UI,
+  JavaScript, and authored styles removed; legacy storage data is not
+  destructively migrated (`4aa10b8`).
 
 ### Project workflow
 
@@ -164,6 +171,12 @@ Last verified: 2026-08-02
   duplicate-ID and selector contracts, persistence-path inspection, and
   `git diff --check` passed. The existing local-`file:` browser restriction
   prevented a claimed visual-browser result.
+- Live-deployment checks confirmed the generated Tailwind build, popup syntax,
+  duplicate-ID and lookup contracts, and a clean diff. At 410 Ã— 600, the
+  workspace opened with two live sources and all source-dependent actions
+  disabled; selecting one enabled Preview, Download, and Send. Starting
+  listening added a third source through the storage-change path, updated the
+  count, and retained the rule that Preview stays disabled without selection.
 
 ## Next candidates
 

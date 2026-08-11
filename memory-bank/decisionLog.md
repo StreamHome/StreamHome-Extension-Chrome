@@ -1,6 +1,6 @@
 # Decision Log
 
-Last verified: 2026-08-02
+Last verified: 2026-08-11
 
 ## 1. Ignore media chunks
 
@@ -48,7 +48,12 @@ The directory remains matched by `.gitignore` for incidental local notes. The us
 
 ## 12. Store deployment drafts per context
 
-Deployment controls must survive popup closure without leaking choices into another title, episode, source, or saved deployment. Task draft keys include media identity, episode scope, and a stable hash of the selected source; saved deployments use their record ID. Each draft stores the form controls and subtitle state under its own `chrome.storage.local` key, while `activeDeploymentKey` identifies the surface to restore. Saved-deployment writes are awaited before navigation or submission continues.
+Deployment controls must survive popup closure without leaking choices into
+another title or episode. Draft keys include media type, task identity, season,
+and episode but not an individual source URL, so live source additions do not
+replace the workspace draft. Each draft stores the selected source, form
+controls, subtitles, and manual markers under its own `chrome.storage.local`
+key, while `activeDeploymentKey` identifies the surface to restore.
 
 ## 13. Give buttons semantic Ember roles
 
@@ -85,7 +90,7 @@ A subtitle is not selected while its content check is pending. Verified,
 corrected, and detected tracks are compatible and receive a one-time automatic
 selection. Short, low-confidence, unavailable, and unsupported tracks are
 persisted as Broken, disabled in the checklist, and excluded from draft
-selection, saved records, and deployment payloads. `defaultSelectionApplied`
+selection and deployment payloads. `defaultSelectionApplied`
 ensures the automatic policy runs once; afterward, a user's manual deselection
 remains authoritative across asynchronous rerenders and popup restoration.
 
@@ -133,9 +138,9 @@ Deletion first updates the active checklist and deployment draft while
 preserving all other checked tracks. Captured subtitles must also be removed
 from their movie or exact TV episode, together with favorite/tag references,
 captured headers, and quality metadata; using an explicit episode scope avoids
-deleting from whichever episode happens to be active later. Saved deployment
-subtitles are written back immediately. The storage operation is awaited so
-the row cannot reappear after navigation or popup restoration.
+deleting from whichever episode happens to be active later. The storage
+operation is awaited so the row cannot reappear after navigation or popup
+restoration.
 
 ## 21. Keep deployment quality canonical and user-selectable
 
@@ -144,5 +149,17 @@ deployment. Every quality selector exposes one stable ladder from `4K` through
 `144p`; source-specific format labels do not replace or extend it. Detected
 `2160p` and `1440p` values and legacy labels normalize to `4K` and `2K`, while
 unrecognized labels use the `1080p` default. One canonical getter supplies the
-per-context draft, saved custom record, and ingestion payload so the user's
+per-context draft and ingestion payload so the user's
 selection survives restoration and is the value that is deployed.
+
+## 22. Combine capture review and deployment
+
+A captured source is not a separate saved record. Movie cards and selected TV
+episodes open one deployment workspace whose top section owns listening and a
+live detected-media list. Source selection is single-choice and enables
+preview/download; deployment additionally accepts the explicit video override.
+New captures rerender in place through storage changes while the selected
+source and media/episode draft remain stable. The obsolete intermediate stream
+page, manual video/audio tag controls, saved-deployment UI, and `custom_records`
+read/write paths are removed. Existing legacy storage values are left intact
+rather than deleted during migration.

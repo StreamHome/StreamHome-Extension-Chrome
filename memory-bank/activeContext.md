@@ -1,10 +1,17 @@
 # Active Context
 
-Last verified: 2026-08-02
+Last verified: 2026-08-11
 
 ## Current state
 
-The StreamHome Chrome extension is operational and has no active implementation task. The latest completed work is:
+The StreamHome Chrome extension is operational. Alternate-audio discovery is
+the active follow-up. The latest completed work is:
+
+- `4aa10b8`: removed the intermediate captured-stream and saved-deployment
+  surfaces, made movie cards and TV episode choices open one live deployment
+  workspace, placed listening and detected-media selection at the top, updated
+  new captures in place, and enabled preview/download/deployment only after a
+  source is selected or explicitly overridden where applicable.
 
 - `4cdefaa`: replaced source-dependent quality choices with a canonical
   `4K` through `144p` ladder, normalized detected and legacy resolution labels,
@@ -77,6 +84,14 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   eligible favorite/video match appears in the Recommended Streams group;
   other matches remain in their normal quality categories. Video/audio matches
   also retain the existing background auto-tag behavior.
+- Movie cards open the live deployment workspace directly. TV cards retain the
+  required season/episode choice, then open the same workspace with exact
+  episode scope.
+- The deployment header owns the listening toggle. Detected media is rendered
+  as a live, keyboard-operable radio list; `chrome.storage.onChanged` adds new
+  captures without navigation. Preview and download remain disabled until a
+  detected source is selected, and deployment also accepts the explicit video
+  override.
 - Series streams are stored per episode so navigating between episodes does not leak streams across episode boundaries.
 - Preview playback supports HLS.js, dash.js, and direct media. Subtitle preview uses the dedicated reader surface.
 - Subtitle tracks expand to their full list height inside the deployment
@@ -103,8 +118,8 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   Every subtitle row also exposes an accessible Ember destructive action.
   Deleting a captured track removes it from the current movie or exact episode,
   including its favorite/tag, captured-header, and quality references. Manual
-  draft tracks and saved-deployment tracks are removed from their owning
-  context, and other subtitle selections remain unchanged.
+  draft tracks are removed from their owning context, and other subtitle
+  selections remain unchanged.
   Sampling uses a URL-scoped request-header rule limited to service-worker
   requests, includes source credentials, and falls back from a bounded Range
   request to a bounded full response so URLs that work in the reader are also
@@ -119,9 +134,11 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
 - The quality selector always offers `4K`, `2K`, `1080p`, `720p`, `480p`,
   `360p`, `240p`, and `144p`. Detected `2160p` / `1440p` and legacy labels are
   normalized to the matching choice; unknown format labels default to `1080p`.
-  The selected quality is retained in the deployment draft, saved deployment
-  record, and submitted payload.
-- Deployment drafts also remember language, audio, custom paths, subtitle
+  The selected quality is retained in the media/episode deployment draft and
+  submitted payload.
+- Deployment drafts are scoped to the media or exact episode rather than an
+  individual captured source. They also remember the selected source,
+  language, audio, custom paths, subtitle
   additions and selections, pending subtitle fields, episodic values, manual
   skip markers, and pending manual marker input. The active deployment surface
   can be restored after the popup closes.
@@ -220,9 +237,18 @@ and quality-selector contract checks, and `git diff --check`. A direct behavior
 harness confirmed the exact eight-option order, mapped `2160` / legacy
 `4K (2160p)` to `4K`, mapped `1440p` to `2K`, retained a selected `240p`, and
 defaulted non-quality format labels to `1080p`. Source inspection confirmed the
-same canonical getter feeds deployment drafts, saved custom records, and the
-ingestion payload. The known local-`file:` browser restriction prevented a new
+same canonical getter feeds deployment drafts and the ingestion payload; the
+saved-record path checked at that time was later retired by `4aa10b8`. The
+known local-`file:` browser restriction prevented a new
 visual-browser claim.
+The live-deployment consolidation passed the Tailwind build,
+`node --check popup.js`, duplicate-ID and HTML/JavaScript ID-contract checks,
+`git diff --check`, and a 410 Ã— 600 browser fixture. The fixture confirmed an
+initially unselected workspace with disabled Preview/Download/Send actions, a
+selected source enabling all three, and a listening update that added a new
+source live, changed the count from two to three, and kept Preview disabled
+until selection. Existing `custom_records` storage data was not deleted, but
+the saved-deployment UI and all of its read/write paths were removed.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
