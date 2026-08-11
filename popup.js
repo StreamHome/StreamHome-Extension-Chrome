@@ -12,6 +12,7 @@ let currentStreamItem = null;
 let currentTaskContext = null;
 let selectedStreamUrl = null;
 let selectedAudioUrl = null;
+let selectedAudioTrackId = null;
 let activeDeploymentKey = null;
 let isRestoringDeploymentDraft = false;
 let currentSkipMarkers = createEmptySkipMarkers();
@@ -61,7 +62,7 @@ let selectedTmdbId = null;
 let selectedTitle = '';
 let selectedContentType = 'movie';
 let selectedQuality = '';
-let availableAudios = {};
+let availableAudios = [];
 let availableVideos = {};
 let availableSubtitles = [];
 
@@ -154,7 +155,7 @@ let btnTvBack, tvShowTitle, tvShowMeta, tvSeasonsContainer, tvEpisodesContainer;
 let btnPlayerBack, playerPageTitle, playerPageMeta, displayStreamUrl;
 let playerMetaTmdb, playerMetaType;
 let btnDeployServer, btnDownloadStream, btnPreviewStream, iconDeployState, textDeployState;
-let qualitySelector, languageSelector, audioSelector, audioSelectorWrapper, subtitlesWrapper, subtitlesList;
+let qualitySelector, languageSelector, audioSelector, audioSelectorWrapper, dubbingTracksList, subtitlesWrapper, subtitlesList;
 let deploySeasonInput, deployEpisodeInput, deployEpisodicInputsWrapper;
 let customVideoInput, customAudioInput;
 let skipMarkersPanel, skipMarkersStatus, skipMarkersList, btnRetrySkipMarkers;
@@ -219,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
   audioSelector = document.getElementById('audio-selector');
   languageSelector = document.getElementById('language-selector');
   audioSelectorWrapper = document.getElementById('audio-selector-wrapper');
+  dubbingTracksList = document.getElementById('dubbing-tracks-list');
   subtitlesWrapper = document.getElementById('subtitles-wrapper');
   subtitlesList = document.getElementById('subtitles-list');
   deploySeasonInput = document.getElementById('deploy-season-input');
@@ -280,6 +282,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (audioSelector) {
     audioSelector.addEventListener('change', (e) => {
       selectedAudioUrl = e.target.value;
+      const selectedTrack = availableAudios.find((track) => track.audioUrl === selectedAudioUrl);
+      selectedAudioTrackId = selectedTrack ? selectedTrack.id : null;
+      updateDubbingTrackSelection();
       persistDeploymentDraft();
     });
   }
@@ -492,13 +497,14 @@ function collectDeploymentDraft() {
   const quality = getCurrentVideoQuality();
 
   return {
-    version: 3,
+    version: 4,
     kind: 'task',
     contextKey: activeDeploymentKey,
     taskId: currentTaskId ?? currentTaskContext.id,
     currentStreamItem: currentStreamItem || null,
     selectedStreamUrl: selectedStreamUrl || '',
     selectedAudioUrl: selectedAudio || '',
+    selectedAudioTrackId: selectedAudioTrackId || '',
     selectedQuality: quality,
     language: languageSelector ? languageSelector.value : 'en',
     customVideo: customVideoInput ? customVideoInput.value : '',
@@ -571,11 +577,9 @@ function applyDeploymentDraft(draft) {
 
     if (qualitySelector) setSelectedVideoQuality(draft.selectedQuality);
 
-    if (audioSelector) {
-      const audioExists = Array.from(audioSelector.options).some((option) => option.value === draft.selectedAudioUrl);
-      audioSelector.value = audioExists ? (draft.selectedAudioUrl || '') : '';
-      selectedAudioUrl = audioSelector.value;
-    }
+    selectedAudioTrackId = draft.selectedAudioTrackId || null;
+    selectedAudioUrl = typeof draft.selectedAudioUrl === 'string' ? draft.selectedAudioUrl : '';
+    populateAudioSelector();
 
     if (languageSelector) {
       addSelectOptionIfMissing(languageSelector, draft.language);
@@ -1016,6 +1020,7 @@ function getScopedTaskForRendering(task) {
     favorites: task.episodes[epKey].favorites || [],
     taggedVideoUrl: task.episodes[epKey].taggedVideoUrl || null,
     taggedAudioUrl: task.episodes[epKey].taggedAudioUrl || null,
+    manifestAudioTracks: task.episodes[epKey].manifestAudioTracks || {},
     capturedHeaders: task.capturedHeaders || {},
     streamQualities: task.streamQualities || {}
   };
@@ -1151,6 +1156,51 @@ function getSubtitleInfo(url) {
 }
 
 // Yeni kategorileri de destekleyen dağıtım motoru
+function normalizeAudioTrack(track, fallback = {}) {
+  if (!track) return null;
+  const audioUrl = track.audioUrl || track.url || '';
+  const language = String(track.language || track.lang || fallback.language || 'unknown')
+    .trim()
+    .replace(/_/g, '-')
+    .toLowerCase() || 'unknown';
+  const sourceType = track.sourceType || fallback.sourceType || 'direct';
+  const label = String(track.name || track.label || fallback.label || '').trim()
+    || getSubtitleLanguageName(language);
+  const id = String(track.id || `${sourceType}:${audioUrl}:${language}:${label}`);
+  return {
+    id,
+    audioUrl,
+    lang: language,
+    language,
+    label,
+    sourceType,
+    manifestUrl: track.manifestUrl || fallback.manifestUrl || '',
+    groupId: track.groupId || '',
+    representationId: track.representationId || '',
+    isDefault: track.isDefault === true,
+    deployable: track.deployable !== false && Boolean(audioUrl)
+  };
+}
+
+function getManifestAudioTracks(task) {
+  const trackMap = task && task.manifestAudioTracks && typeof task.manifestAudioTracks === 'object'
+    ? task.manifestAudioTracks
+    : {};
+  const tracks = [];
+  const seen = new Set();
+
+  Object.values(trackMap).forEach((manifestTracks) => {
+    if (!Array.isArray(manifestTracks)) return;
+    manifestTracks.forEach((track) => {
+      const normalized = normalizeAudioTrack(track);
+      if (!normalized || seen.has(normalized.id)) return;
+      seen.add(normalized.id);
+      tracks.push(normalized);
+    });
+  });
+  return tracks;
+}
+
 function processRawStreams(rawUrls, task) {
     const itemsByRes = {
         '1080': [],
@@ -1162,8 +1212,12 @@ function processRawStreams(rawUrls, task) {
         'Progressive MP4': [],
         'Unknown': []
     };
-    const audioStreams = [];
+    const audioStreams = getManifestAudioTracks(task);
     const subtitleStreams = [];
+    const knownManifestAudioUrls = new Set(audioStreams
+      .map((track) => track.audioUrl)
+      .filter(Boolean));
+    const knownAudioIds = new Set(audioStreams.map((track) => track.id));
 
   rawUrls.forEach(url => {
     let res = 'Unknown';
@@ -1190,14 +1244,22 @@ function processRawStreams(rawUrls, task) {
         return;
     }
 
-    if (url.match(/\.(mp3|aac|ogg|wav|flac|m4a)$/i) || getMirrorLabel(url).toLowerCase().includes('audio')) {
-        audioStreams.push({
-            quality: 'Audio',
-            videoUrl: null,
-            audioUrl: url,
-            isVr1: false,
-            label: label
+    if (knownManifestAudioUrls.has(url)) return;
+
+    if (url.match(/\.(mp3|aac|ogg|wav|flac|m4a)(?:$|[?#])/i) || getMirrorLabel(url).toLowerCase().includes('audio')) {
+        const languageInfo = getSubtitleInfo(url);
+        const directTrack = normalizeAudioTrack({
+          id: `direct:${url}`,
+          url,
+          language: languageInfo.lang,
+          name: languageInfo.lang === 'unknown' ? label : getSubtitleLanguageName(languageInfo.lang),
+          sourceType: 'direct',
+          deployable: true
         });
+        if (directTrack && !knownAudioIds.has(directTrack.id)) {
+          knownAudioIds.add(directTrack.id);
+          audioStreams.push(directTrack);
+        }
         return;
     }
 
@@ -1504,6 +1566,7 @@ function refreshDeploymentWorkspace(task, patterns = {}, learningTasks = scanned
   if (!renderTask) return;
 
   const previousAudio = audioSelector ? audioSelector.value : selectedAudioUrl;
+  const previousAudioTrackId = selectedAudioTrackId;
   let stateChanged = false;
   const parsed = processRawStreams(renderTask.rawStreams || [], renderTask);
   currentTaskContext = renderTask;
@@ -1522,12 +1585,10 @@ function refreshDeploymentWorkspace(task, patterns = {}, learningTasks = scanned
   }
 
   populateAudioSelector();
-  if (audioSelector) {
-    const audioExists = Array.from(audioSelector.options).some((option) => option.value === previousAudio);
-    audioSelector.value = audioExists ? previousAudio : '';
-    selectedAudioUrl = audioSelector.value;
-    if (previousAudio && !audioExists) stateChanged = true;
-  }
+  const audioSelectionRetained = previousAudioTrackId
+    ? selectedAudioTrackId === previousAudioTrackId
+    : (!previousAudio || selectedAudioUrl === previousAudio);
+  if ((previousAudioTrackId || previousAudio) && !audioSelectionRetained) stateChanged = true;
   populateSubtitles({ preserveSelection: true });
   renderGroupedStreams(renderTask, patterns, learningTasks);
   updateDeploymentCaptureButton(currentTaskId == activeTaskId);
@@ -1564,6 +1625,8 @@ function openPlayerDeployPage(task, selectedItem = null, rawUrls = [], audioItem
   currentStreamItem = selectedItem;
   selectedStreamUrl = selectedItem ? (selectedItem.videoUrl || selectedItem.audioUrl || '') : '';
   const preferredAudioUrl = audioItem ? (audioItem.videoUrl || audioItem.audioUrl || '') : '';
+  selectedAudioTrackId = audioItem && audioItem.id ? audioItem.id : null;
+  selectedAudioUrl = preferredAudioUrl;
   activeDeploymentKey = getTaskDeploymentKey(task);
 
   playerPageTitle.textContent = task.title;
@@ -1598,9 +1661,6 @@ function openPlayerDeployPage(task, selectedItem = null, rawUrls = [], audioItem
   setSelectedVideoQuality(selectedItem ? selectedItem.quality : DEFAULT_VIDEO_QUALITY);
 
   populateAudioSelector();
-  const preferredAudioExists = Array.from(audioSelector.options).some((option) => option.value === preferredAudioUrl);
-  audioSelector.value = preferredAudioExists ? preferredAudioUrl : '';
-  selectedAudioUrl = audioSelector.value;
 
   populateLanguageSelector();
   populateSubtitles();
@@ -1675,44 +1735,138 @@ function onQualityChange(quality) {
   persistDeploymentDraft();
 }
 
+function escapeHtml(value) {
+  const element = document.createElement('div');
+  element.textContent = String(value ?? '');
+  return element.innerHTML;
+}
+
 function populateAudioSelector() {
-    audioSelector.innerHTML = '';
-    const noAudioOption = document.createElement('option');
-    noAudioOption.value = '';
-    noAudioOption.textContent = 'No additional audio';
-    audioSelector.appendChild(noAudioOption);
+  if (!audioSelector || !audioSelectorWrapper || !dubbingTracksList) return;
 
-    let hasOptions = (availableAudios.length > 0);
+  const previousTrackId = selectedAudioTrackId;
+  const previousAudioUrl = selectedAudioUrl || audioSelector.value || '';
+  audioSelector.innerHTML = '';
+  dubbingTracksList.innerHTML = '';
 
-    if (availableAudios.length > 0) {
-        availableAudios.forEach((audio, index) => {
-            const option = document.createElement('option');
-            option.value = audio.audioUrl;
-            option.textContent = audio.label || `Audio Track #${index + 1}`;
-            audioSelector.appendChild(option);
-        });
-    }
+  const noAudioOption = document.createElement('option');
+  noAudioOption.value = '';
+  noAudioOption.textContent = 'Original audio';
+  audioSelector.appendChild(noAudioOption);
 
-    if (availableVideos) {
-        Object.entries(availableVideos).forEach(([res, items]) => {
-            if (items && items.length > 0) {
-                items.forEach((videoItem) => {
-                    const option = document.createElement('option');
-                    option.value = videoItem.videoUrl;
-                    option.textContent = `[Video as Audio] ${videoItem.label || 'Video Source'} (${res})`;
-                    audioSelector.appendChild(option);
-                    hasOptions = true;
-                });
-            }
-        });
-    }
+  const sortedTracks = [...(availableAudios || [])].sort((left, right) => {
+    if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
+    return String(left.language || '').localeCompare(String(right.language || ''));
+  });
 
-    if (hasOptions) {
-        audioSelectorWrapper.classList.remove('hidden');
-    } else {
-        audioSelectorWrapper.classList.add('hidden');
-    }
-    audioSelector.value = '';
+  sortedTracks.forEach((track) => {
+    const option = document.createElement('option');
+    option.value = track.audioUrl || '';
+    option.dataset.trackId = track.id;
+    option.textContent = `${getSubtitleLanguageName(track.language)} · ${track.label}`;
+    option.disabled = !track.deployable;
+    audioSelector.appendChild(option);
+  });
+
+  let selectedTrack = sortedTracks.find((track) => track.id === previousTrackId) || null;
+  if (!selectedTrack && previousAudioUrl) {
+    selectedTrack = sortedTracks.find((track) => track.audioUrl === previousAudioUrl) || null;
+  }
+  if (!selectedTrack || !selectedTrack.deployable) selectedTrack = null;
+
+  selectedAudioTrackId = selectedTrack ? selectedTrack.id : null;
+  selectedAudioUrl = selectedTrack ? selectedTrack.audioUrl : '';
+  audioSelector.value = selectedAudioUrl;
+
+  const rows = [{
+    id: '',
+    audioUrl: '',
+    language: 'original',
+    label: 'Original source audio',
+    sourceType: 'source',
+    isDefault: false,
+    deployable: true
+  }, ...sortedTracks];
+
+  rows.forEach((track) => {
+    const isOriginal = !track.id;
+    const isSelected = isOriginal ? !selectedAudioTrackId : track.id === selectedAudioTrackId;
+    const row = document.createElement('div');
+    row.className = 'dubbing-track-row';
+    row.dataset.trackId = track.id || '';
+    row.dataset.selected = isSelected ? 'true' : 'false';
+    row.dataset.disabled = track.deployable ? 'false' : 'true';
+    row.setAttribute('role', 'radio');
+    row.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+    row.setAttribute('aria-disabled', track.deployable ? 'false' : 'true');
+    row.tabIndex = track.deployable ? 0 : -1;
+
+    const language = isOriginal ? 'Original' : getSubtitleLanguageName(track.language);
+    const languageCode = isOriginal
+      ? 'SRC'
+      : (track.language && track.language !== 'unknown' ? track.language.toUpperCase() : '—');
+    const sourceLabel = track.sourceType === 'hls'
+      ? 'HLS audio'
+      : track.sourceType === 'dash'
+        ? 'DASH audio'
+        : track.sourceType === 'direct'
+          ? 'Direct audio'
+          : 'Source audio';
+    const stateLabel = track.deployable
+      ? (isSelected ? 'Selected' : 'Select')
+      : 'Manifest-managed';
+
+    row.setAttribute('aria-label', `${stateLabel} ${language} ${track.label}`);
+    row.innerHTML = `
+      <div class="dubbing-track-language-line">
+        <span class="dubbing-track-language">${escapeHtml(language)}</span>
+        <span class="dubbing-track-code">${escapeHtml(languageCode)}</span>
+        ${track.isDefault ? '<span class="dubbing-track-default">Default</span>' : ''}
+      </div>
+      <div class="dubbing-track-meta">
+        <span class="dubbing-track-label">${escapeHtml(track.label)}</span>
+        <span class="dubbing-track-source">${escapeHtml(sourceLabel)}</span>
+      </div>
+      <span class="dubbing-track-state">${escapeHtml(stateLabel)}</span>
+    `;
+
+    const chooseTrack = () => {
+      if (!track.deployable) return;
+      selectedAudioTrackId = track.id || null;
+      selectedAudioUrl = track.audioUrl || '';
+      audioSelector.value = selectedAudioUrl;
+      if (!isOriginal && track.language && track.language !== 'unknown' && languageSelector) {
+        const primaryLanguage = track.language.split('-')[0];
+        const languageExists = Array.from(languageSelector.options)
+          .some((option) => option.value === primaryLanguage);
+        if (languageExists) languageSelector.value = primaryLanguage;
+      }
+      updateDubbingTrackSelection();
+      persistDeploymentDraft();
+    };
+    row.addEventListener('click', chooseTrack);
+    row.addEventListener('keydown', (event) => {
+      if (event.target !== row || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      chooseTrack();
+    });
+    dubbingTracksList.appendChild(row);
+  });
+
+  audioSelectorWrapper.classList.toggle('hidden', sortedTracks.length === 0);
+}
+
+function updateDubbingTrackSelection() {
+  if (!dubbingTracksList) return;
+  dubbingTracksList.querySelectorAll('.dubbing-track-row').forEach((row) => {
+    const isSelected = selectedAudioTrackId
+      ? row.dataset.trackId === selectedAudioTrackId
+      : row.dataset.trackId === '';
+    row.dataset.selected = isSelected ? 'true' : 'false';
+    row.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+    const state = row.querySelector('.dubbing-track-state');
+    if (state && row.dataset.disabled !== 'true') state.textContent = isSelected ? 'Selected' : 'Select';
+  });
 }
 
 function populateLanguageSelector() {
@@ -2175,9 +2329,18 @@ function onPreviewClick() {
   const selectedAudio = audioSelector ? audioSelector.value : '';
   if (selectedAudio) {
     params.set('audioUrl', selectedAudio);
+    const selectedTrack = availableAudios.find((track) => track.id === selectedAudioTrackId)
+      || availableAudios.find((track) => track.audioUrl === selectedAudio);
+    if (selectedTrack) {
+      params.set('audioTrackId', selectedTrack.id);
+      params.set('audioLanguage', selectedTrack.language || 'unknown');
+      params.set('audioLabel', selectedTrack.label || 'Dubbing track');
+      params.set('audioSourceType', selectedTrack.sourceType || 'direct');
+    }
     const audioHeaders = (currentTaskContext.capturedHeaders && selectedAudio) ? currentTaskContext.capturedHeaders[selectedAudio] : {};
     if (audioHeaders.referer) params.set('audioReferer', audioHeaders.referer);
     if (audioHeaders.origin) params.set('audioOrigin', audioHeaders.origin);
+    if (audioHeaders['user-agent']) params.set('audioUseragent', audioHeaders['user-agent']);
   }
   
   chrome.tabs.create({ url: `player.html?${params.toString()}` });
@@ -2487,6 +2650,16 @@ function deleteStreamRecord(taskId, url, episodeScope = null) {
         if (index !== -1) arr.splice(index, 1);
       };
 
+      const removeFromManifestAudioTracks = (owner, val) => {
+        if (!owner || !owner.manifestAudioTracks) return;
+        delete owner.manifestAudioTracks[val];
+        Object.keys(owner.manifestAudioTracks).forEach((manifestUrl) => {
+          const tracks = owner.manifestAudioTracks[manifestUrl];
+          if (!Array.isArray(tracks)) return;
+          owner.manifestAudioTracks[manifestUrl] = tracks.filter((track) => track && track.url !== val);
+        });
+      };
+
       if (task.type === 'series') {
         const season = (episodeScope && episodeScope.season) ?? task.activeSeason ?? 1;
         const episode = (episodeScope && episodeScope.episode) ?? task.activeEpisode ?? 1;
@@ -2497,11 +2670,13 @@ function deleteStreamRecord(taskId, url, episodeScope = null) {
           removeFromArray(epData.favorites, url);
           if (epData.taggedVideoUrl === url) epData.taggedVideoUrl = null;
           if (epData.taggedAudioUrl === url) epData.taggedAudioUrl = null;
+          removeFromManifestAudioTracks(epData, url);
         }
       } else {
         removeFromArray(task.favorites, url);
         if (task.taggedVideoUrl === url) task.taggedVideoUrl = null;
         if (task.taggedAudioUrl === url) task.taggedAudioUrl = null;
+        removeFromManifestAudioTracks(task, url);
       }
 
       if (task.capturedHeaders) delete task.capturedHeaders[url];

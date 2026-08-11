@@ -191,7 +191,51 @@ function getResolution(lowerUrl) {
   return 'Unknown';
 }
 
-function parseHlsManifest(text) {
+function parseManifestAttributeList(value) {
+  const attributes = {};
+  let token = '';
+  let quoted = false;
+  const parts = [];
+
+  for (const char of String(value || '')) {
+    if (char === '"') quoted = !quoted;
+    if (char === ',' && !quoted) {
+      parts.push(token);
+      token = '';
+    } else {
+      token += char;
+    }
+  }
+  if (token) parts.push(token);
+
+  parts.forEach((part) => {
+    const separator = part.indexOf('=');
+    if (separator === -1) return;
+    const key = part.slice(0, separator).trim().toUpperCase();
+    let attributeValue = part.slice(separator + 1).trim();
+    if (attributeValue.startsWith('"') && attributeValue.endsWith('"')) {
+      attributeValue = attributeValue.slice(1, -1);
+    }
+    if (key) attributes[key] = attributeValue;
+  });
+  return attributes;
+}
+
+function resolveManifestUrl(value, manifestUrl) {
+  if (!value) return '';
+  try {
+    return new URL(value, manifestUrl).href;
+  } catch (_) {
+    return '';
+  }
+}
+
+function normalizeManifestLanguage(value) {
+  const normalized = String(value || '').trim().replace(/_/g, '-').toLowerCase();
+  return normalized || 'unknown';
+}
+
+function parseHlsManifest(text, manifestUrl) {
   const resolutions = new Set();
   const regex = /#EXT-X-STREAM-INF:.*RESOLUTION=(\d+)x(\d+)/g;
   let match;
@@ -199,10 +243,49 @@ function parseHlsManifest(text) {
     const height = parseInt(match[2], 10);
     if (height) resolutions.add(`${height}p`);
   }
-  return Array.from(resolutions).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+
+  const audioTracks = [];
+  String(text || '').split(/\r?\n/).forEach((line) => {
+    const normalizedLine = line.trim();
+    if (!normalizedLine.startsWith('#EXT-X-MEDIA:')) return;
+    const attributes = parseManifestAttributeList(normalizedLine.slice('#EXT-X-MEDIA:'.length));
+    if (String(attributes.TYPE || '').toUpperCase() !== 'AUDIO') return;
+
+    const audioUrl = resolveManifestUrl(attributes.URI, manifestUrl);
+    const language = normalizeManifestLanguage(attributes.LANGUAGE || attributes['ASSOC-LANGUAGE']);
+    const name = String(attributes.NAME || '').trim() || (language === 'unknown' ? 'Audio track' : language.toUpperCase());
+    const groupId = String(attributes['GROUP-ID'] || '').trim();
+    audioTracks.push({
+      id: `hls:${audioUrl || manifestUrl}:${groupId}:${language}:${name}`,
+      url: audioUrl,
+      language,
+      name,
+      groupId,
+      sourceType: 'hls',
+      manifestUrl,
+      isDefault: String(attributes.DEFAULT || '').toUpperCase() === 'YES',
+      autoSelect: String(attributes.AUTOSELECT || '').toUpperCase() === 'YES',
+      deployable: Boolean(audioUrl)
+    });
+  });
+
+  return {
+    qualities: Array.from(resolutions).sort((a, b) => parseInt(b, 10) - parseInt(a, 10)),
+    audioTracks
+  };
 }
 
-function parseDashManifest(text) {
+function getXmlAttributes(value) {
+  const attributes = {};
+  const regex = /([\w:-]+)\s*=\s*(["'])(.*?)\2/g;
+  let match;
+  while ((match = regex.exec(String(value || ''))) !== null) {
+    attributes[match[1].toLowerCase()] = match[3];
+  }
+  return attributes;
+}
+
+function parseDashManifest(text, manifestUrl) {
   const resolutions = new Set();
   const regex = /<Representation[^>]*width="(\d+)"[^>]*height="(\d+)"/gi;
   let match;
@@ -210,10 +293,48 @@ function parseDashManifest(text) {
     const height = parseInt(match[2], 10);
     if (height) resolutions.add(`${height}p`);
   }
-  return Array.from(resolutions).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+
+  const audioTracks = [];
+  const adaptationRegex = /<AdaptationSet\b([^>]*)>([\s\S]*?)<\/AdaptationSet>/gi;
+  while ((match = adaptationRegex.exec(String(text || ''))) !== null) {
+    const adaptationAttributes = getXmlAttributes(match[1]);
+    const body = match[2];
+    const representationMatch = body.match(/<Representation\b([^>]*)>([\s\S]*?)<\/Representation>|<Representation\b([^>]*)\/>/i);
+    const representationAttributes = getXmlAttributes(representationMatch ? (representationMatch[1] || representationMatch[3] || '') : '');
+    const mimeType = adaptationAttributes.mimetype || representationAttributes.mimetype || '';
+    const contentType = adaptationAttributes.contenttype || '';
+    if (contentType.toLowerCase() !== 'audio' && !mimeType.toLowerCase().startsWith('audio/')) continue;
+
+    const representationBody = representationMatch ? (representationMatch[2] || '') : '';
+    const baseUrlMatch = representationBody.match(/<BaseURL[^>]*>([^<]+)<\/BaseURL>/i)
+      || body.match(/<BaseURL[^>]*>([^<]+)<\/BaseURL>/i);
+    const resolvedUrl = baseUrlMatch ? resolveManifestUrl(baseUrlMatch[1].trim(), manifestUrl) : '';
+    const deployable = /\.(m3u8?|mp3|aac|ogg|wav|flac|m4a)(?:$|[?#])/i.test(resolvedUrl);
+    const language = normalizeManifestLanguage(adaptationAttributes.lang || representationAttributes.lang);
+    const adaptationId = adaptationAttributes.id || '';
+    const representationId = representationAttributes.id || '';
+    audioTracks.push({
+      id: `dash:${manifestUrl}:${adaptationId}:${representationId}:${language}`,
+      url: deployable ? resolvedUrl : '',
+      language,
+      name: language === 'unknown' ? 'DASH audio track' : language.toUpperCase(),
+      groupId: adaptationId,
+      representationId,
+      sourceType: 'dash',
+      manifestUrl,
+      isDefault: false,
+      autoSelect: false,
+      deployable
+    });
+  }
+
+  return {
+    qualities: Array.from(resolutions).sort((a, b) => parseInt(b, 10) - parseInt(a, 10)),
+    audioTracks
+  };
 }
 
-async function detectManifestQualities(url, type, extractedHeaders) {
+async function inspectManifest(url, type, extractedHeaders) {
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 5000);
@@ -227,17 +348,17 @@ async function detectManifestQualities(url, type, extractedHeaders) {
     if (!response.ok) throw new Error(`HTTP status ${response.status}`);
     const text = await response.text();
 
-    let qualities = [];
+    let metadata = { qualities: [], audioTracks: [] };
     if (type === 'm3u8') {
-      qualities = parseHlsManifest(text);
+      metadata = parseHlsManifest(text, url);
     } else if (type === 'mpd') {
-      qualities = parseDashManifest(text);
+      metadata = parseDashManifest(text, url);
     }
 
-    if (qualities && qualities.length > 0) {
-      console.log(`[DEBUG] Successfully parsed real qualities from manifest for ${url}:`, qualities);
-      return qualities;
+    if (metadata.qualities.length > 0 || metadata.audioTracks.length > 0) {
+      console.log(`[DEBUG] Successfully parsed manifest metadata for ${url}:`, metadata);
     }
+    return metadata;
   } catch (e) {
     console.error(`[DEBUG] Manifest fetch/parse failed for ${url}:`, e);
   }
@@ -478,11 +599,11 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
     if (preCheck.activeTabId && sourceTabId !== -1 && sourceTabId !== preCheck.activeTabId) return;
 
     const extractedHeaders = extractKeyHeaders(requestHeaders);
-    const qualityPromise = (type === 'm3u8' || type === 'mpd')
-      ? detectManifestQualities(url, type, extractedHeaders)
+    const manifestPromise = (type === 'm3u8' || type === 'mpd')
+      ? inspectManifest(url, type, extractedHeaders)
       : Promise.resolve(null);
 
-    qualityPromise.then((detectedQualities) => {
+    manifestPromise.then((manifestMetadata) => {
       runInQueue((next) => {
         chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
           // Re-verify in case it was turned off during the fetch
@@ -515,6 +636,13 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
         task.streamQualities = task.streamQualities || {};
 
         task.capturedHeaders[url] = extractedHeaders;
+
+        const detectedQualities = manifestMetadata && Array.isArray(manifestMetadata.qualities)
+          ? manifestMetadata.qualities
+          : [];
+        const detectedAudioTracks = manifestMetadata && Array.isArray(manifestMetadata.audioTracks)
+          ? manifestMetadata.audioTracks
+          : [];
 
         // Save detected qualities
         if (detectedQualities && detectedQualities.length > 0) {
@@ -563,6 +691,7 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
           const epData = task.episodes[epKey];
           epData.rawStreams = epData.rawStreams || [];
           epData.favorites = epData.favorites || [];
+          epData.manifestAudioTracks = epData.manifestAudioTracks || {};
           
           if (!epData.rawStreams.includes(url)) {
             epData.rawStreams.push(url);
@@ -579,6 +708,16 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
           }
           task.status = `Discovered ${task.rawStreams.length} Streams`;
           targetData = task;
+        }
+
+        targetData.manifestAudioTracks = targetData.manifestAudioTracks || {};
+        if ((type === 'm3u8' || type === 'mpd') && manifestMetadata) {
+          targetData.manifestAudioTracks[url] = detectedAudioTracks;
+          detectedAudioTracks.forEach((track) => {
+            if (track && track.url && !task.capturedHeaders[track.url]) {
+              task.capturedHeaders[track.url] = extractedHeaders;
+            }
+          });
         }
 
         if (!isNewStream) {
@@ -624,7 +763,7 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
       }); // closes postCheck
     }); // closes result
   }); // closes runInQueue
-}); // closes qualityPromise.then
+}); // closes manifestPromise.then
 }); // closes preCheck
 }
 
@@ -641,53 +780,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(() => sendResponse({ ok: false, reason: 'fetch-failed' }));
     return true;
   } else if (message.action === 'set_bypass_rules') {
-    const { targetUrl, headers } = message;
-    if (!targetUrl) return;
+    const targets = Array.isArray(message.targets)
+      ? message.targets.filter((target) => target && target.url)
+      : (message.targetUrl ? [{ url: message.targetUrl, headers: message.headers || {} }] : []);
+    if (targets.length === 0) return;
+
+    const ruleIds = [ruleId, ruleId + 1000000];
 
     try {
-      const urlObj = new URL(targetUrl);
-      const host = urlObj.host;
-      
-      const requestHeaders = [];
-      if (headers.referer) {
-        requestHeaders.push({ header: 'referer', operation: 'set', value: headers.referer });
-      }
-      if (headers.origin) {
-        requestHeaders.push({ header: 'origin', operation: 'set', value: headers.origin });
-      }
-      if (headers['user-agent']) {
-        requestHeaders.push({ header: 'user-agent', operation: 'set', value: headers['user-agent'] });
-      }
-
-      // If no headers to spoof, just remove any rule for this tab and return
-      if (requestHeaders.length === 0) {
-        chrome.declarativeNetRequest.updateSessionRules({
-          removeRuleIds: [ruleId]
-        });
-        return;
-      }
-
-      const rule = {
-        id: ruleId,
-        priority: 1,
-        action: {
-          type: 'modifyHeaders',
-          requestHeaders: requestHeaders
-        },
-        condition: {
-          urlFilter: `*://${host}/*`,
-          resourceTypes: ['xmlhttprequest', 'media']
-        }
-      };
+      const uniqueHosts = new Map();
+      targets.forEach((target) => {
+        const host = new URL(target.url).host;
+        if (!uniqueHosts.has(host)) uniqueHosts.set(host, target.headers || {});
+      });
+      const addRules = Array.from(uniqueHosts.entries()).slice(0, ruleIds.length).flatMap(([host, headers], index) => {
+        const requestHeaders = [];
+        if (headers.referer) requestHeaders.push({ header: 'referer', operation: 'set', value: headers.referer });
+        if (headers.origin) requestHeaders.push({ header: 'origin', operation: 'set', value: headers.origin });
+        if (headers['user-agent']) requestHeaders.push({ header: 'user-agent', operation: 'set', value: headers['user-agent'] });
+        if (requestHeaders.length === 0) return [];
+        return [{
+          id: ruleIds[index],
+          priority: 1,
+          action: { type: 'modifyHeaders', requestHeaders },
+          condition: {
+            urlFilter: `*://${host}/*`,
+            resourceTypes: ['xmlhttprequest', 'media']
+          }
+        }];
+      });
 
       chrome.declarativeNetRequest.updateSessionRules({
-        removeRuleIds: [ruleId],
-        addRules: [rule]
+        removeRuleIds: ruleIds,
+        addRules
       }, () => {
         if (chrome.runtime.lastError) {
           console.error(`[DEBUG] DNR Session Rules Registration Failed for Rule ${ruleId}:`, chrome.runtime.lastError);
         } else {
-          console.log(`[DEBUG] Successfully registered DNR Referer bypass rules for host ${host} (Rule ${ruleId})`);
+          console.log(`[DEBUG] Successfully registered ${addRules.length} DNR preview bypass rule(s).`);
         }
       });
     } catch (e) {
@@ -695,7 +825,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   } else if (message.action === 'clear_bypass_rules') {
     chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [ruleId]
+      removeRuleIds: [ruleId, ruleId + 1000000]
     }, () => {
       console.log(`[DEBUG] Cleared active DNR Referer bypass rules (Rule ${ruleId}).`);
     });

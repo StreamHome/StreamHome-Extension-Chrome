@@ -288,9 +288,15 @@
           <select id="language-selector" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"></select>
         </div>
       </div>
-      <div class="space-y-1 hidden" id="audio-selector-wrapper">
-        <label for="audio-selector" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Separate audio track</label>
-        <select id="audio-selector" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-cyan-500 transition-colors"></select>
+      <div id="audio-selector-wrapper" class="dubbing-tracks-section hidden" aria-labelledby="dubbing-tracks-title">
+        <div class="dubbing-tracks-heading">
+          <div>
+            <span id="dubbing-tracks-title" class="dubbing-tracks-title">Dubbing tracks</span>
+            <span class="dubbing-tracks-hint">Choose one detached or manifest-declared audio track.</span>
+          </div>
+        </div>
+        <div id="dubbing-tracks-list" class="dubbing-tracks-list" role="radiogroup" aria-label="Dubbing tracks"></div>
+        <select id="audio-selector" class="hidden" aria-hidden="true" tabindex="-1"></select>
       </div>
 
       <div id="subtitles-wrapper" class="subtitle-tracks-section hidden">

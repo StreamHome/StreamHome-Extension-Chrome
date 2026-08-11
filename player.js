@@ -43,10 +43,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const params = new URLSearchParams(window.location.search);
   const streamUrl = params.get('url');
   const title = params.get('title') || 'Stream Preview';
+  const audioUrl = params.get('audioUrl') || '';
+  const audioLanguage = (params.get('audioLanguage') || 'unknown').toLowerCase();
+  const audioLabel = params.get('audioLabel') || 'Dubbing track';
   
   const referer = params.get('referer');
   const origin = params.get('origin');
   const useragent = params.get('useragent');
+  const audioReferer = params.get('audioReferer');
+  const audioOrigin = params.get('audioOrigin');
+  const audioUseragent = params.get('audioUseragent');
 
   if (!streamUrl) {
     log('No stream URL provided in query parameters.', 'error');
@@ -88,11 +94,49 @@ document.addEventListener('DOMContentLoaded', () => {
   if (origin) bypassHeaders.origin = origin;
   if (useragent) bypassHeaders['user-agent'] = useragent;
 
+  const bypassTargets = [{
+    url: streamUrl,
+    headers: bypassHeaders
+  }];
+  if (audioUrl) {
+    const audioBypassHeaders = {};
+    if (audioReferer) audioBypassHeaders.referer = audioReferer;
+    if (audioOrigin) audioBypassHeaders.origin = audioOrigin;
+    if (audioUseragent) audioBypassHeaders['user-agent'] = audioUseragent;
+    bypassTargets.push({ url: audioUrl, headers: audioBypassHeaders });
+  }
+
   chrome.runtime.sendMessage({
     action: 'set_bypass_rules',
-    targetUrl: streamUrl,
-    headers: bypassHeaders
+    targets: bypassTargets
   });
+
+  function normalizedUrl(value) {
+    try {
+      return new URL(value, streamUrl).href;
+    } catch (_) {
+      return String(value || '');
+    }
+  }
+
+  function selectHlsDubbingTrack(hls) {
+    if (!audioUrl || !hls || !Array.isArray(hls.audioTracks)) return false;
+    const wantedUrl = normalizedUrl(audioUrl);
+    let index = hls.audioTracks.findIndex((track) => {
+      const urls = Array.isArray(track.url) ? track.url : [track.url];
+      return urls.some((url) => normalizedUrl(url) === wantedUrl);
+    });
+    if (index === -1 && audioLanguage !== 'unknown') {
+      index = hls.audioTracks.findIndex((track) => String(track.lang || '').toLowerCase() === audioLanguage);
+    }
+    if (index === -1) {
+      index = hls.audioTracks.findIndex((track) => String(track.name || '').toLowerCase() === audioLabel.toLowerCase());
+    }
+    if (index === -1) return false;
+    hls.audioTrack = index;
+    log(`Selected dubbing track: ${audioLabel} (${audioLanguage.toUpperCase()})`, 'success');
+    return true;
+  }
 
   // Handle spin state
   video.addEventListener('waiting', () => {
@@ -131,7 +175,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const hls = new Hls();
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+        selectHlsDubbingTrack(hls);
+      });
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (audioUrl) selectHlsDubbingTrack(hls);
         log('HLS Manifest successfully parsed. Starting playback...', 'success');
       });
       hls.on(Hls.Events.ERROR, function (event, data) {
