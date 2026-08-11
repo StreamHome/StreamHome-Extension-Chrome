@@ -4,8 +4,15 @@ Last verified: 2026-08-11
 
 ## Current state
 
-The StreamHome Chrome extension is operational. Alternate-audio discovery is
-the active follow-up. The latest completed work is:
+The StreamHome Chrome extension is operational. Manifest-declared dubbing
+tracks are now visible and selectable in the live deployment workspace. The
+latest completed work is:
+
+- `42d18ba`: parsed HLS and DASH audio declarations into structured,
+  episode-scoped tracks; rendered accessible dubbing choices beside subtitles;
+  preserved the selection through live updates and drafts; submitted the
+  selected URL through `audio_url`; and selected matching HLS audio during
+  preview when HLS.js exposes it.
 
 - `4aa10b8`: removed the intermediate captured-stream and saved-deployment
   surfaces, made movie cards and TV episode choices open one live deployment
@@ -75,6 +82,13 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   listening task, while unmarked site service-worker requests remain eligible
   for the normal capture gates.
 - HLS, DASH, direct media, and subtitle requests are detected from network traffic. Chunk/static asset requests and non-success responses are ignored.
+- HLS `EXT-X-MEDIA:TYPE=AUDIO` declarations and DASH audio adaptation sets are
+  stored as structured tracks with stable identity, language, label, source
+  type, default state, manifest ownership, and deployability. Relative audio
+  URLs are resolved against their manifest. URI-less or segmented
+  manifest-managed tracks remain visible so their existence is not hidden, but
+  cannot be selected as a detached `audio_url`. A failed manifest refresh
+  preserves previously discovered tracks.
 - Favorites and manual video/audio tags train a shared local recommendation
   model. It compares stable URL structure such as normalized CDN families,
   path tails, filenames, embedded media extensions, and query-key names without
@@ -93,7 +107,11 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   detected source is selected, and deployment also accepts the explicit video
   override.
 - Series streams are stored per episode so navigating between episodes does not leak streams across episode boundaries.
-- Preview playback supports HLS.js, dash.js, and direct media. Subtitle preview uses the dedicated reader surface.
+- Preview playback supports HLS.js, dash.js, and direct media. When a selected
+  dubbing URL belongs to the HLS master, the player matches it by URL with
+  language/name fallbacks and selects the corresponding HLS.js audio track.
+  Preview request-header rules can cover the video and audio hosts and are
+  removed together. Subtitle preview uses the dedicated reader surface.
 - Subtitle tracks expand to their full list height inside the deployment
   content, display normalized language names and codes instead of source-host
   labels, and retain checked selections when a custom track is added. The
@@ -138,7 +156,7 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   submitted payload.
 - Deployment drafts are scoped to the media or exact episode rather than an
   individual captured source. They also remember the selected source,
-  language, audio, custom paths, subtitle
+  language, selected audio-track identity and URL, custom paths, subtitle
   additions and selections, pending subtitle fields, episodic values, manual
   skip markers, and pending manual marker input. The active deployment surface
   can be restored after the popup closes.
@@ -249,6 +267,18 @@ selected source enabling all three, and a listening update that added a new
 source live, changed the count from two to three, and kept Preview disabled
 until selection. Existing `custom_records` storage data was not deleted, but
 the saved-deployment UI and all of its read/write paths were removed.
+The dubbing-track follow-up passed the Tailwind build, syntax checks for
+`background.js`, `popup.js`, and `player.js`, duplicate-ID and
+HTML/JavaScript ID-contract checks, `git diff --check`, and direct HLS/DASH
+manifest parsing scenarios. The HLS scenario resolved a Turkish audio playlist
+whose URL contained `1080p` as audio rather than video, preserved a quoted
+comma in its label, and kept a URI-less Japanese track visible but
+nondeployable. The DASH scenario distinguished a deployable direct audio URL
+from a segmented manifest-managed representation. A 410-pixel browser fixture
+showed Original, Turkish HLS, English direct, and disabled Japanese embedded
+rows without horizontal overflow or console errors. Starting listening added
+a new German HLS row live while preserving the selected Turkish track, its
+hidden audio URL, and the deployment language.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
@@ -259,7 +289,8 @@ and pushed memory-bank update.
 ## Known follow-ups
 
 - Add automated tests for credential lifecycle, task/tab capture gates, and series episode isolation.
-- Improve discovery and selection of alternate audio tracks in manifests.
+- Resolve deployment semantics for manifest-managed audio tracks that do not
+  expose a standalone audio URL.
 - Align movie ingestion payloads with the server preference to omit `season` and `episode`; the current extension sends them as `null`.
 
 This memory bank records verified project context, but the implementation and current Git history remain the source of truth when they disagree.

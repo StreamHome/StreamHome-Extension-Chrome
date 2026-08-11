@@ -163,3 +163,17 @@ source and media/episode draft remain stable. The obsolete intermediate stream
 page, manual video/audio tag controls, saved-deployment UI, and `custom_records`
 read/write paths are removed. Existing legacy storage values are left intact
 rather than deleted during migration.
+
+## 23. Treat manifest audio as structured dubbing tracks
+
+An HLS child playlist can include `1080p` in its URL without being a video
+variant, so URL resolution labels cannot determine whether it is dubbing.
+Manifest inspection now treats HLS audio declarations and DASH audio
+adaptation sets as authoritative structured metadata. The deployment workspace
+shows those tracks beside subtitle choices, retains selection by stable track
+identity across live updates and popup restoration, and submits a selectable
+standalone URL through the existing `audio_url` boundary. Tracks whose audio
+is managed entirely inside the manifest remain visible but disabled so users
+can see that dubbing exists without sending an invalid detached URL. Network
+failure preserves the last successful manifest metadata rather than erasing
+it.

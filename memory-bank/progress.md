@@ -37,12 +37,17 @@ Last verified: 2026-08-11
   selected value persisted through deployment drafts and ingestion
   (`4cdefaa`, with saved-record persistence retired by `4aa10b8`).
 - Subtitle selection and StreamHome ingestion.
+- Structured HLS/DASH/direct dubbing discovery with language, labels, default
+  state, episode isolation, live selection retention, deployment-draft
+  persistence, and `audio_url` ingestion (`42d18ba`).
 
 ### Preview surfaces
 
 - HLS.js, dash.js, and direct-media player support.
 - Subtitle reader support.
 - Per-tab request-header bypass rules with cleanup.
+- HLS.js preview selection of the chosen manifest audio rendition, with
+  request-header bypass coverage for both video and audio hosts (`42d18ba`).
 
 ### Frontend and credentials
 
@@ -81,6 +86,9 @@ Last verified: 2026-08-11
 - Intermediate captured-stream review and saved-deployment/custom-record UI,
   JavaScript, and authored styles removed; legacy storage data is not
   destructively migrated (`4aa10b8`).
+- Accessible Ember dubbing radio rows for Original, HLS, DASH, and direct
+  audio, including visible disabled states for manifest-managed tracks without
+  standalone URLs (`42d18ba`).
 
 ### Project workflow
 
@@ -177,10 +185,20 @@ Last verified: 2026-08-11
   disabled; selecting one enabled Preview, Download, and Send. Starting
   listening added a third source through the storage-change path, updated the
   count, and retained the rule that Preview stays disabled without selection.
+- Dubbing-track checks confirmed the Tailwind build; syntax for background,
+  popup, and player; duplicate-ID and lookup contracts; a clean diff; and
+  direct HLS/DASH parsing. A Turkish HLS audio URL containing `1080p` remained
+  audio, relative URLs and quoted labels normalized correctly, and URI-less or
+  segmented tracks remained visible metadata without becoming deployable. In
+  the 410-pixel popup fixture, Original, HLS, direct, and disabled
+  manifest-managed states rendered without horizontal overflow or console
+  errors. A new German HLS track appeared during listening while the Turkish
+  selection, audio URL, and language remained unchanged.
 
 ## Next candidates
 
 1. Add automated regression coverage for capture and credential state machines.
-2. Improve alternate-audio discovery and selection.
+2. Resolve manifest-managed audio deployment when no standalone audio URL is
+   available.
 3. Align movie ingestion fields with the server's omission preference.
 4. Continue accessibility and long-content testing at popup dimensions.

@@ -169,6 +169,32 @@ currently checked URLs without automatically reselecting a track the user
 unchecked. Deployment drafts persist compatibility and default-selection
 metadata together with the selected URL set.
 
+## Dubbing-track model
+
+Manifest audio is metadata, not a video-quality guess. HLS inspection parses
+`EXT-X-MEDIA` audio declarations with quoted attribute support and resolves
+relative URIs against the master URL. DASH inspection reads audio adaptation
+sets and their first representation. Both normalize tracks to a stable ID,
+language, label, source type, default state, manifest URL, and deployability.
+Direct audio requests use the same popup model. Audio-playlist URLs already
+owned by a manifest track are excluded from video-quality groups even when the
+path contains strings such as `1080p`.
+
+Movie tracks live on the task; TV tracks live on the exact episode. Captured
+headers for a successfully resolved audio URL inherit the manifest request
+headers when no more specific capture exists. Failed manifest reinspection
+does not replace known audio metadata with an empty list. Live storage updates
+rerender the list while retaining the stable selected track ID and URL.
+
+The deployment workspace presents Original plus all discovered tracks as one
+keyboard-operable radio group. Standalone HLS, DASH, or direct URLs are
+selectable; manifest-managed entries without a deployable URL remain visible
+and disabled. The selected identity and URL are part of the context draft,
+the URL feeds the existing `audio_url` payload field, and selecting a known
+language updates the deployment language. HLS preview asks HLS.js to select the
+matching rendition by resolved URL, then language or name, and preview header
+rules cover both selected video and audio hosts.
+
 ## Deployment boundary
 
 The popup combines TMDB metadata, selected captured sources, request headers,
