@@ -654,7 +654,8 @@ function restorePlayerDeployView(state) {
           taggedVideoUrl: episodeData ? episodeData.taggedVideoUrl : null,
           taggedAudioUrl: episodeData ? episodeData.taggedAudioUrl : null,
           capturedHeaders: task.capturedHeaders || {},
-          streamQualities: task.streamQualities || {}
+          streamQualities: task.streamQualities || {},
+          streamSourceTypes: task.streamSourceTypes || {}
         };
       }
 
@@ -1022,7 +1023,8 @@ function getScopedTaskForRendering(task) {
     taggedAudioUrl: task.episodes[epKey].taggedAudioUrl || null,
     manifestAudioTracks: task.episodes[epKey].manifestAudioTracks || {},
     capturedHeaders: task.capturedHeaders || {},
-    streamQualities: task.streamQualities || {}
+    streamQualities: task.streamQualities || {},
+    streamSourceTypes: task.streamSourceTypes || {}
   };
 }
 
@@ -2355,14 +2357,47 @@ function triggerStreamDownloads() {
   });
 }
 
+function requireHttpSourceUrl(value, fieldLabel) {
+  let parsed;
+  try {
+    parsed = new URL(String(value || '').trim());
+  } catch (error) {
+    throw new Error(`${fieldLabel} must be an absolute HTTP(S) URL.`);
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+    throw new Error(`${fieldLabel} must be an absolute HTTP(S) URL without embedded credentials.`);
+  }
+  return parsed.href;
+}
+
+function getSourceTypeForUrl(url, explicitSourceType = '') {
+  if (explicitSourceType === 'hls') return 'hls';
+  const capturedType = currentTaskContext
+    && currentTaskContext.streamSourceTypes
+    && currentTaskContext.streamSourceTypes[url];
+  if (capturedType === 'm3u8') return 'hls';
+  const lowerUrl = String(url || '').toLowerCase();
+  return lowerUrl.includes('.m3u8') || lowerUrl.includes('mpegurl') || lowerUrl.includes('/hls/')
+    ? 'hls'
+    : 'auto';
+}
+
 async function deployMetadataPayload() {
   const customVideo = customVideoInput ? customVideoInput.value.trim() : '';
   const customAudio = customAudioInput ? customAudioInput.value.trim() : '';
 
-  const finalStreamUrl = customVideo || selectedStreamUrl;
-  selectedAudioUrl = customAudio || audioSelector.value;
+  const rawVideoUrl = customVideo || selectedStreamUrl;
+  const rawAudioUrl = customAudio || audioSelector.value;
 
-  if (!finalStreamUrl) { displayError('No video stream has been selected or provided.'); return; }
+  if (!rawVideoUrl) { displayError('No video stream has been selected or provided.'); return; }
+  let finalStreamUrl;
+  try {
+    finalStreamUrl = requireHttpSourceUrl(rawVideoUrl, 'Video source');
+    selectedAudioUrl = rawAudioUrl ? requireHttpSourceUrl(rawAudioUrl, 'Audio source') : '';
+  } catch (error) {
+    displayError(error.message);
+    return;
+  }
   if (shouldOfferManualSkipMarkers() && hasPendingManualSkipMarker() && !addManualSkipMarker()) return;
   btnDeployServer.disabled = true;
   btnDeployServer.dataset.state = 'loading';
@@ -2386,31 +2421,50 @@ async function deployMetadataPayload() {
     subtitleCheckboxes.forEach(checkbox => {
         let code = checkbox.dataset.lang || 'en';
         if (code === 'unknown') code = 'en';
-        selectedSubtitles.push({
+        try {
+          selectedSubtitles.push({
             language: code,
-            url: formatLocalPathToServerUrl(checkbox.value)
-        });
+            url: requireHttpSourceUrl(checkbox.value, 'Subtitle source')
+          });
+        } catch (error) {
+          // Invalid selected subtitle sources are reported before submission below.
+          selectedSubtitles.push({ error: error.message });
+        }
     });
   }
+  const invalidSubtitle = selectedSubtitles.find((subtitle) => subtitle.error);
+  if (invalidSubtitle) {
+    displayError(invalidSubtitle.error);
+    resetDeployButtonState();
+    return;
+  }
+
+  const selectedAudioTrack = availableAudios.find((track) => track.id === selectedAudioTrackId)
+    || availableAudios.find((track) => track.audioUrl === selectedAudioUrl);
 
   // RULE-COMPLIANT PAYLOAD GENERATION
   const payload = {
-    video_url: formatLocalPathToServerUrl(finalStreamUrl),
-    audio_url: selectedAudioUrl ? formatLocalPathToServerUrl(selectedAudioUrl) : null,
+    video_url: finalStreamUrl,
+    audio_url: selectedAudioUrl || null,
+    video_source_type: getSourceTypeForUrl(finalStreamUrl),
     media_type: currentTaskContext.type === 'series' ? 'tv' : 'movie',
     tmdb_id: parseInt(currentTaskContext.id, 10),
-    season: null,
-    episode: null,
     headers: headers || {},
     quality: getCurrentVideoQuality(),
     language: (selectedLanguage && selectedLanguage !== 'other') ? selectedLanguage : 'en',
     subtitles: selectedSubtitles
   };
+  if (selectedAudioUrl) {
+    payload.audio_source_type = getSourceTypeForUrl(
+      selectedAudioUrl,
+      selectedAudioTrack && selectedAudioTrack.sourceType
+    );
+  }
   
   if (currentTaskContext.type === 'series') {
     const season = parseInt(deploySeasonInput.value, 10);
     const episode = parseInt(deployEpisodeInput.value, 10);
-    if (isNaN(season) || season < 0 || isNaN(episode) || episode < 0) {
+    if (isNaN(season) || season < 0 || isNaN(episode) || episode < 1) {
         displayError('Please enter valid season and episode numbers.');
         resetDeployButtonState();
         return;
@@ -2681,6 +2735,7 @@ function deleteStreamRecord(taskId, url, episodeScope = null) {
 
       if (task.capturedHeaders) delete task.capturedHeaders[url];
       if (task.streamQualities) delete task.streamQualities[url];
+      if (task.streamSourceTypes) delete task.streamSourceTypes[url];
 
       // Always remove from the primary/unscoped rawStreams
       removeFromArray(task.rawStreams, url);
@@ -3180,41 +3235,4 @@ function convertSkipMarkers(dbMarkers) {
   }
 
   return skip_markers;
-}
-
-function formatLocalPathToServerUrl(inputPath) {
-  if (!inputPath) return '';
-  const trimmed = inputPath.trim();
-  if (trimmed.toLowerCase().startsWith('http://') || trimmed.toLowerCase().startsWith('https://')) {
-    return trimmed;
-  }
-
-  // Strip file:/// if present
-  let cleanPath = trimmed;
-  if (cleanPath.toLowerCase().startsWith('file:///')) {
-    cleanPath = cleanPath.substring(8);
-  }
-
-  // Look for /media/ or \media\ to extract relative path under media directory
-  const mediaIndex = cleanPath.toLowerCase().replace(/\\/g, '/').indexOf('/media/');
-  if (mediaIndex !== -1) {
-    const relativePart = cleanPath.substring(mediaIndex + 7).replace(/\\/g, '/');
-    return `${savedServerUrl}/media/${relativePart}`;
-  }
-
-  // If it's a relative path or doesn't have a drive letter/absolute prefix, assume it is under media
-  if (!cleanPath.includes(':') && !cleanPath.startsWith('/') && !cleanPath.startsWith('\\')) {
-    return `${savedServerUrl}/media/${cleanPath.replace(/\\/g, '/')}`;
-  }
-
-  // If it's an absolute path outside media folder, fallback to serving from media/Movies/ or media/
-  // by grabbing the filename and placing it under media/
-  const parts = cleanPath.split(/[\\/]/);
-  const filename = parts[parts.length - 1];
-  // Determine if it's a subtitle
-  const isSubtitle = cleanPath.toLowerCase().endsWith('.vtt') || cleanPath.toLowerCase().endsWith('.srt');
-  if (isSubtitle) {
-    return `${savedServerUrl}/media/Subtitles/${filename}`;
-  }
-  return `${savedServerUrl}/media/Movies/${filename}`;
 }

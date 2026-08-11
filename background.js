@@ -634,8 +634,10 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
         task.rawStreams = task.rawStreams || [];
         task.capturedHeaders = task.capturedHeaders || {};
         task.streamQualities = task.streamQualities || {};
+        task.streamSourceTypes = task.streamSourceTypes || {};
 
         task.capturedHeaders[url] = extractedHeaders;
+        task.streamSourceTypes[url] = type;
 
         const detectedQualities = manifestMetadata && Array.isArray(manifestMetadata.qualities)
           ? manifestMetadata.qualities
