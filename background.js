@@ -14,7 +14,235 @@ const BLACKLISTED_MIMES = [
 
 const SUBTITLE_SAMPLE_MAX_BYTES = 128 * 1024;
 const SUBTITLE_SAMPLE_RULE_ID_BASE = 1500000000;
+const MEDIA_SENDER_OPERATION_STORAGE_KEY = 'mediaSenderOperations';
+const MEDIA_SENDER_MAX_OPERATION_HISTORY = 30;
+const MEDIA_SENDER_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 let subtitleSampleRuleOffset = 0;
+let mediaSenderOperationStateQueue = Promise.resolve();
+
+const MEDIA_SENDER_BODY_FIELDS = Object.freeze({
+  ingest: new Set([
+    'tmdb_id', 'media_type', 'video_url', 'audio_url', 'video_source_type',
+    'audio_source_type', 'season', 'episode', 'headers', 'subtitles', 'quality',
+    'language', 'skip_markers'
+  ]),
+  replace_markers: new Set(['skip_markers']),
+  put_subtitle: new Set(['language', 'label', 'url', 'headers']),
+  put_audio: new Set(['url', 'source_type', 'headers'])
+});
+
+function readLocalStorage(keys) {
+  return new Promise((resolve) => chrome.storage.local.get(keys, resolve));
+}
+
+function writeLocalStorage(values) {
+  return new Promise((resolve) => chrome.storage.local.set(values, resolve));
+}
+
+function normalizeMediaSenderBaseUrl(value) {
+  const parsed = new URL(String(value || '').trim());
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+    throw new Error('The StreamHome server URL must be HTTP(S) without embedded credentials.');
+  }
+  parsed.hash = '';
+  parsed.search = '';
+  parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+  return parsed.href.replace(/\/$/, '');
+}
+
+function isValidMediaSenderMediaId(value) {
+  return /^m_\d+$/.test(value) || /^ep_\d+_s\d+_e[1-9]\d*$/.test(value);
+}
+
+function isValidMediaSenderTrackId(value) {
+  return /^[A-Za-z0-9_-]{1,64}$/.test(value);
+}
+
+function isValidMediaSenderLanguage(value) {
+  return /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value);
+}
+
+function validateMediaSenderBody(operation, body) {
+  const allowedFields = MEDIA_SENDER_BODY_FIELDS[operation];
+  if (!allowedFields) {
+    if (body == null) return;
+    throw new Error(`Operation ${operation} does not accept a request body.`);
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error(`Operation ${operation} requires a JSON object body.`);
+  }
+  const unknownField = Object.keys(body).find((field) => !allowedFields.has(field));
+  if (unknownField) throw new Error(`Unsupported MediaSender field: ${unknownField}`);
+}
+
+function buildMediaSenderRequestDescriptor(request) {
+  const operation = String(request && request.operation || '');
+  const mediaId = String(request && request.mediaId || '');
+  const trackId = String(request && request.trackId || '');
+  const language = String(request && request.language || '');
+
+  if (operation === 'ingest') {
+    validateMediaSenderBody(operation, request.body);
+    return { method: 'POST', path: '/api/add-movie', operation, mediaId: '' };
+  }
+  if (!isValidMediaSenderMediaId(mediaId)) throw new Error('Invalid StreamHome media ID.');
+
+  if (operation === 'get_metadata') {
+    validateMediaSenderBody(operation, request.body);
+    return { method: 'GET', path: `/api/media/${encodeURIComponent(mediaId)}/metadata`, operation, mediaId };
+  }
+  if (operation === 'replace_markers') {
+    validateMediaSenderBody(operation, request.body);
+    return { method: 'PATCH', path: `/api/media/${encodeURIComponent(mediaId)}/metadata`, operation, mediaId };
+  }
+  if (operation === 'put_subtitle' || operation === 'delete_subtitle') {
+    if (!isValidMediaSenderTrackId(trackId)) throw new Error('Subtitle track ID must contain 1-64 letters, numbers, underscores, or hyphens.');
+    validateMediaSenderBody(operation, request.body);
+    return {
+      method: operation === 'put_subtitle' ? 'PUT' : 'DELETE',
+      path: `/api/media/${encodeURIComponent(mediaId)}/subtitles/${encodeURIComponent(trackId)}`,
+      operation,
+      mediaId
+    };
+  }
+  if (operation === 'put_audio' || operation === 'delete_audio') {
+    if (!isValidMediaSenderLanguage(language)) throw new Error('Invalid dubbing language tag.');
+    validateMediaSenderBody(operation, request.body);
+    return {
+      method: operation === 'put_audio' ? 'PUT' : 'DELETE',
+      path: `/api/media/${encodeURIComponent(mediaId)}/audio/${encodeURIComponent(language)}`,
+      operation,
+      mediaId
+    };
+  }
+  throw new Error('Unsupported MediaSender operation.');
+}
+
+function extractMediaSenderError(status, body) {
+  const detail = body && body.detail;
+  if (detail && typeof detail === 'object') {
+    return {
+      code: String(detail.code || `http_${status}`),
+      message: String(detail.message || `StreamHome returned HTTP ${status}.`)
+    };
+  }
+  if (typeof detail === 'string' && detail.trim()) {
+    return { code: `http_${status}`, message: detail.trim() };
+  }
+  return { code: `http_${status}`, message: `StreamHome returned HTTP ${status}.` };
+}
+
+function updateMediaSenderOperation(operationId, update) {
+  if (!operationId) return Promise.resolve();
+  mediaSenderOperationStateQueue = mediaSenderOperationStateQueue.then(async () => {
+    const stored = await readLocalStorage([MEDIA_SENDER_OPERATION_STORAGE_KEY]);
+    const operations = stored[MEDIA_SENDER_OPERATION_STORAGE_KEY]
+      && typeof stored[MEDIA_SENDER_OPERATION_STORAGE_KEY] === 'object'
+      ? stored[MEDIA_SENDER_OPERATION_STORAGE_KEY]
+      : {};
+    operations[operationId] = {
+      ...(operations[operationId] || {}),
+      ...update
+    };
+    const retainedEntries = Object.entries(operations)
+      .sort((left, right) => Number(right[1].startedAt || 0) - Number(left[1].startedAt || 0))
+      .slice(0, MEDIA_SENDER_MAX_OPERATION_HISTORY);
+    await writeLocalStorage({ [MEDIA_SENDER_OPERATION_STORAGE_KEY]: Object.fromEntries(retainedEntries) });
+  }).catch(() => {
+    // Operation persistence must never replace the API result.
+  });
+  return mediaSenderOperationStateQueue;
+}
+
+async function executeMediaSenderRequest(request) {
+  const requestedOperationId = String(request && request.operationId || '');
+  const operationId = /^[A-Za-z0-9:_-]{1,128}$/.test(requestedOperationId)
+    ? requestedOperationId
+    : `media-sender:${Date.now()}`;
+  let descriptor;
+  try {
+    descriptor = buildMediaSenderRequestDescriptor(request || {});
+  } catch (error) {
+    return { ok: false, status: 0, code: 'invalid_request', message: error.message };
+  }
+
+  const credentials = await readLocalStorage(['serverUrl', 'apiKey']);
+  if (!credentials.serverUrl || !credentials.apiKey) {
+    return { ok: false, status: 401, code: 'missing_credentials', message: 'StreamHome connection credentials are missing.' };
+  }
+
+  let baseUrl;
+  try {
+    baseUrl = normalizeMediaSenderBaseUrl(credentials.serverUrl);
+  } catch (error) {
+    return { ok: false, status: 0, code: 'invalid_server_url', message: error.message };
+  }
+
+  const startedAt = Date.now();
+  await updateMediaSenderOperation(operationId, {
+    operationId,
+    operation: descriptor.operation,
+    mediaId: descriptor.mediaId,
+    status: 'pending',
+    startedAt,
+    completedAt: null,
+    code: null,
+    message: null
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), MEDIA_SENDER_REQUEST_TIMEOUT_MS);
+  let result;
+  try {
+    const response = await fetch(`${baseUrl}${descriptor.path}`, {
+      method: descriptor.method,
+      headers: {
+        'Authorization': `Bearer ${credentials.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: descriptor.method === 'GET' || descriptor.method === 'DELETE'
+        ? undefined
+        : JSON.stringify(request.body),
+      signal: controller.signal
+    });
+    let responseBody = null;
+    const responseText = await response.text();
+    if (responseText) {
+      try {
+        responseBody = JSON.parse(responseText);
+      } catch (error) {
+        responseBody = null;
+      }
+    }
+    if (!response.ok) {
+      const apiError = extractMediaSenderError(response.status, responseBody);
+      result = { ok: false, status: response.status, ...apiError };
+    } else {
+      result = { ok: true, status: response.status, data: responseBody };
+    }
+  } catch (error) {
+    const timedOut = error && error.name === 'AbortError';
+    result = {
+      ok: false,
+      status: 0,
+      code: timedOut ? 'request_timeout' : 'network_error',
+      message: timedOut
+        ? 'StreamHome did not finish the operation before the extension timeout.'
+        : 'The extension could not reach StreamHome.'
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  await updateMediaSenderOperation(operationId, {
+    status: result.ok ? 'success' : 'error',
+    completedAt: Date.now(),
+    code: result.ok ? null : result.code,
+    message: result.ok ? null : result.message,
+    httpStatus: result.status
+  });
+  return { ...result, operationId };
+}
 
 function buildCapturedFetchHeaders(extractedHeaders = {}, includeRange = false) {
   const fetchHeaders = { 'X-StreamHome-Sniffer': 'true' };
@@ -776,7 +1004,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Determine rule ID dynamically from tab ID to avoid collisions
   const ruleId = (sender.tab && sender.tab.id) ? sender.tab.id : 1001;
 
-  if (message.action === 'fetch_subtitle_sample') {
+  if (message.action === 'media_sender_request') {
+    executeMediaSenderRequest(message.request || {})
+      .then((result) => {
+        try {
+          sendResponse(result);
+        } catch (error) {
+          // The popup may close while the service worker finishes and persists the operation.
+        }
+      })
+      .catch(() => {
+        try {
+          sendResponse({
+            ok: false,
+            status: 0,
+            code: 'extension_error',
+            message: 'The extension could not complete the MediaSender operation.'
+          });
+        } catch (error) {
+          // The sender is no longer available.
+        }
+      });
+    return true;
+  } else if (message.action === 'fetch_subtitle_sample') {
     fetchSubtitleSample(message.url, message.headers || {})
       .then(sendResponse)
       .catch(() => sendResponse({ ok: false, reason: 'fetch-failed' }));
