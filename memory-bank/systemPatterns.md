@@ -106,7 +106,12 @@ authoritative draft data.
 
 ## Preview request headers
 
-Some sources require captured headers such as Referer or Origin. Player and reader tabs install a dynamic session rule scoped to their tab and remove it when finished. Rule IDs derive from tab IDs to avoid one preview replacing another.
+Some sources require captured headers such as Referer or Origin. Player and
+reader tabs install a dynamic session rule scoped to their tab and remove it
+when finished. Rule IDs derive from tab IDs to avoid one preview replacing
+another. Preview media engines start only after the background worker
+acknowledges the asynchronous rule update; otherwise the first manifest request
+can race ahead of the required headers.
 
 ## UI system
 

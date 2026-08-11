@@ -8,6 +8,9 @@ The StreamHome Chrome extension is operational. The deployment workspace now
 separates new ingestion from completed-playback metadata editing. The latest
 completed work is:
 
+- `1fee842`: made preview wait for the asynchronous DNR header-rule update
+  before HLS.js, DASH, or direct playback starts, eliminating the manifest
+  request race that produced immediate `manifestLoadError` failures.
 - `1dd3532`: added fixed New ingestion and Edit playback tabs, an Ember
   metadata editor for skip markers, subtitle sidecars, and external dubbing
   sidecars, persisted mode/form drafts, server-owned collection loading,
@@ -315,6 +318,9 @@ HLS dubbing prefill, successful PUT/DELETE flows, a 409 error with controls
 restored, tab keyboard navigation, hidden ingestion controls in edit mode, one
 vertical scroll region, no horizontal overflow, and no console errors or
 warnings.
+The preview ordering fix passed `node --check` for `background.js` and
+`player.js` plus `git diff --check`; the background message now acknowledges
+rule installation before the player initializes its media engine.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
