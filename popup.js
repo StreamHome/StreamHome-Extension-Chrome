@@ -61,7 +61,6 @@ let selectedTmdbId = null;
 let selectedTitle = '';
 let selectedContentType = 'movie';
 let selectedQuality = '';
-let availableStreams = {};
 let availableAudios = {};
 let availableVideos = {};
 let availableSubtitles = [];
@@ -145,15 +144,13 @@ function removeCookie(name) {
 
 // Globally scoped DOM Cache variables
 let errorToast, errorMessage, closeToast;
-let pageAuth, pageDashboard, pageCreateTask, pageTaskStreams, pagePlayerDeploy, pageTvDetails;
+let pageAuth, pageDashboard, pageCreateTask, pagePlayerDeploy, pageTvDetails;
 let inputServerUrl, inputApiKey, inputTmdbApiKey, btnVerifyConnect;
 let btnDashboardSettings, btnCreateTask, tasksContainer, dashboardEmptyState;
 let inputTaskSearch, tmdbSuggestions, taskTypeIndicatorWrapper, taskTypeIndicator;
 let btnCancelTask, btnSaveTask;
-let btnStreamsBack, streamsPageTitle, streamsPageMeta, btnStreamsActivate, streamsListContainer;
+let btnDeploymentSniff, deploymentCaptureStatus, deploymentCaptureCount, deploymentSourcesList;
 let btnTvBack, tvShowTitle, tvShowMeta, tvSeasonsContainer, tvEpisodesContainer;
-let streamsFooter, btnDeployTagged;
-
 let btnPlayerBack, playerPageTitle, playerPageMeta, displayStreamUrl;
 let playerMetaTmdb, playerMetaType;
 let btnDeployServer, btnDownloadStream, btnPreviewStream, iconDeployState, textDeployState;
@@ -164,17 +161,7 @@ let skipMarkersPanel, skipMarkersStatus, skipMarkersList, btnRetrySkipMarkers;
 let manualSkipMarkersEditor, manualSkipMarkerType, manualSkipMarkerStart, manualSkipMarkerEnd;
 let btnAddManualSkipMarker, manualSkipMarkersHint, manualSkipMarkersError, manualSkipMarkersList;
 
-// Custom Records Cached variables
-let btnCustomRecordsNav, pageCustomRecords, customRecordsListContainer, customRecordsEmptyState, btnCustomRecordsBack;
 let inputCustomSubUrl, inputCustomSubLang, btnAddCustomSub;
-let editingRecordId = null;
-
-// Create Custom Record elements
-let btnCustomRecordsAdd, modalCreateCustomRecord, inputCreateRecordName, inputCreateRecordSearch;
-let createRecordTmdbSuggestions, createRecordTypeWrapper, createRecordTypeIndicator;
-let btnModalCreateCancel, btnModalCreateSave;
-let selectedCreateTmdbId = null, selectedCreateTitle = '', selectedCreateType = '';
-let createSearchDebounceTimer;
 
 
 
@@ -186,7 +173,6 @@ document.addEventListener('DOMContentLoaded', () => {
   pageAuth = document.getElementById('page-auth');
   pageDashboard = document.getElementById('page-dashboard');
   pageCreateTask = document.getElementById('page-create-task');
-  pageTaskStreams = document.getElementById('page-task-streams');
   pagePlayerDeploy = document.getElementById('page-player-deploy');
   pageTvDetails = document.getElementById('page-tv-details');
 
@@ -207,13 +193,10 @@ document.addEventListener('DOMContentLoaded', () => {
   btnCancelTask = document.getElementById('btn-cancel-task');
   btnSaveTask = document.getElementById('btn-save-task');
 
-  btnStreamsBack = document.getElementById('btn-streams-back');
-  streamsPageTitle = document.getElementById('streams-page-title');
-  streamsPageMeta = document.getElementById('streams-page-meta');
-  btnStreamsActivate = document.getElementById('btn-streams-activate');
-  streamsListContainer = document.getElementById('streams-list-container');
-  streamsFooter = document.getElementById('streams-footer');
-  btnDeployTagged = document.getElementById('btn-deploy-tagged');
+  btnDeploymentSniff = document.getElementById('btn-deployment-sniff');
+  deploymentCaptureStatus = document.getElementById('deployment-capture-status');
+  deploymentCaptureCount = document.getElementById('deployment-capture-count');
+  deploymentSourcesList = document.getElementById('deployment-sources-list');
 
   btnTvBack = document.getElementById('btn-tv-back');
   tvShowTitle = document.getElementById('tv-show-title');
@@ -256,27 +239,9 @@ document.addEventListener('DOMContentLoaded', () => {
   manualSkipMarkersError = document.getElementById('manual-skip-markers-error');
   manualSkipMarkersList = document.getElementById('manual-skip-markers-list');
 
-  btnCustomRecordsNav = document.getElementById('btn-custom-records-nav');
-  pageCustomRecords = document.getElementById('page-custom-records');
-  customRecordsListContainer = document.getElementById('custom-records-list-container');
-  customRecordsEmptyState = document.getElementById('custom-records-empty-state');
-  btnCustomRecordsBack = document.getElementById('btn-custom-records-back');
-
-
-
   inputCustomSubUrl = document.getElementById('input-custom-sub-url');
   inputCustomSubLang = document.getElementById('input-custom-sub-lang');
   btnAddCustomSub = document.getElementById('btn-add-custom-sub');
-
-  btnCustomRecordsAdd = document.getElementById('btn-custom-records-add');
-  modalCreateCustomRecord = document.getElementById('modal-create-custom-record');
-  inputCreateRecordName = document.getElementById('input-create-record-name');
-  inputCreateRecordSearch = document.getElementById('input-create-record-search');
-  createRecordTmdbSuggestions = document.getElementById('create-record-tmdb-suggestions');
-  createRecordTypeWrapper = document.getElementById('create-record-type-wrapper');
-  createRecordTypeIndicator = document.getElementById('create-record-type-indicator');
-  btnModalCreateCancel = document.getElementById('btn-modal-create-cancel');
-  btnModalCreateSave = document.getElementById('btn-modal-create-save');
 
   if (closeToast) closeToast.addEventListener('click', hideToast);
   if (inputServerUrl) inputServerUrl.addEventListener('input', (e) => chrome.storage.local.set({ draftServerUrl: e.target.value }));
@@ -287,10 +252,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnCreateTask) btnCreateTask.addEventListener('click', openCreateTaskPanel);
   if (btnCancelTask) btnCancelTask.addEventListener('click', cancelCreateTask);
   if (btnSaveTask) btnSaveTask.addEventListener('click', saveNewTask);
-  if (btnStreamsBack) btnStreamsBack.addEventListener('click', navigateBackFromStreams);
   if (btnTvBack) btnTvBack.addEventListener('click', onTvBackClick);
-  if (btnDeployTagged) btnDeployTagged.addEventListener('click', onDeployTaggedClick);
-  if (btnPlayerBack) btnPlayerBack.addEventListener('click', navigateBackToStreams);
+  if (btnPlayerBack) btnPlayerBack.addEventListener('click', navigateBackFromDeployment);
+  if (btnDeploymentSniff) btnDeploymentSniff.addEventListener('click', toggleActiveDeploymentCapture);
   if (btnDownloadStream) btnDownloadStream.addEventListener('click', triggerStreamDownloads);
   if (btnPreviewStream) btnPreviewStream.addEventListener('click', onPreviewClick);
   if (btnDeployServer) btnDeployServer.addEventListener('click', deployMetadataPayload);
@@ -311,13 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
       persistDeploymentDraft();
     });
   });
-  if (btnCustomRecordsNav) btnCustomRecordsNav.addEventListener('click', () => switchView('customRecords'));
-  if (btnCustomRecordsBack) btnCustomRecordsBack.addEventListener('click', () => switchView('dashboard'));
-
   if (btnAddCustomSub) btnAddCustomSub.addEventListener('click', addCustomSubtitleTrack);
-  if (btnCustomRecordsAdd) btnCustomRecordsAdd.addEventListener('click', openCreateCustomRecordModal);
-  if (btnModalCreateCancel) btnModalCreateCancel.addEventListener('click', closeCreateCustomRecordModal);
-  if (btnModalCreateSave) btnModalCreateSave.addEventListener('click', saveNewCustomRecord);
   if (qualitySelector) qualitySelector.addEventListener('change', (e) => onQualityChange(e.target.value));
   if (audioSelector) {
     audioSelector.addEventListener('change', (e) => {
@@ -326,7 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   if (languageSelector) languageSelector.addEventListener('change', persistDeploymentDraft);
-  if (customVideoInput) customVideoInput.addEventListener('input', persistDeploymentDraft);
+  if (customVideoInput) customVideoInput.addEventListener('input', () => {
+    updateSourceDependentActions();
+    persistDeploymentDraft();
+  });
   if (customAudioInput) customAudioInput.addEventListener('input', persistDeploymentDraft);
   if (deploySeasonInput) {
     deploySeasonInput.addEventListener('input', () => {
@@ -348,15 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && modalCreateCustomRecord && !modalCreateCustomRecord.classList.contains('hidden')) {
-      closeCreateCustomRecordModal();
-    }
-  });
-
-
   initAutocompleteSearch();
-  initCreateRecordSearch();
 
   getCookies().then((cookies) => {
     if (cookies.serverUrl) {
@@ -376,6 +329,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (targetView === 'playerDeploy') {
           restorePlayerDeployView(result);
+        } else if (targetView === 'taskStreams') {
+          openStoredTaskDeployment(currentTaskId);
         } else if (targetView === 'tvDetails') {
           chrome.storage.local.get(['scanned_tasks'], (taskRes) => {
             const tasks = taskRes.scanned_tasks || [];
@@ -386,6 +341,8 @@ document.addEventListener('DOMContentLoaded', () => {
               switchView('dashboard');
             }
           });
+        } else if (targetView === 'customRecords') {
+          switchView('dashboard');
         } else {
           switchView(targetView);
         }
@@ -406,13 +363,14 @@ document.addEventListener('DOMContentLoaded', () => {
         scannedTasks = changes.scanned_tasks.newValue || [];
         if (activeView === 'dashboard') {
           renderDashboardTasks();
-        } else if (activeView === 'taskStreams') {
+        } else if (activeView === 'playerDeploy') {
           const currentTask = scannedTasks.find(t => t.id == currentTaskId);
           if (currentTask) {
             chrome.storage.local.get(['learned_patterns'], (pRes) => {
-              const renderTask = getScopedTaskForRendering(currentTask);
-              renderGroupedStreams(renderTask, pRes.learned_patterns, scannedTasks);
+              refreshDeploymentWorkspace(currentTask, pRes.learned_patterns, scannedTasks);
             });
+          } else {
+            switchView('dashboard');
           }
         }
       }
@@ -420,9 +378,9 @@ document.addEventListener('DOMContentLoaded', () => {
         activeTaskId = changes.activeTaskId.newValue || null;
         if (activeView === 'dashboard') {
           renderDashboardTasks();
-        } else if (activeView === 'taskStreams') {
-          const isActive = (currentTaskId == activeTaskId);
-          updateStreamsActivateButton(isActive);
+        } else if (activeView === 'playerDeploy') {
+          updateDeploymentCaptureButton(currentTaskId == activeTaskId);
+          updateDeploymentCaptureStatus();
         }
       }
     }
@@ -443,10 +401,8 @@ function switchView(target) {
     auth: pageAuth,
     dashboard: pageDashboard,
     createTask: pageCreateTask,
-    taskStreams: pageTaskStreams,
     playerDeploy: pagePlayerDeploy,
-    tvDetails: pageTvDetails,
-    customRecords: pageCustomRecords
+    tvDetails: pageTvDetails
   };
 
   Object.keys(views).forEach(key => {
@@ -467,10 +423,6 @@ function switchView(target) {
 
   if (target === 'dashboard') {
     loadDashboardPage();
-  } else if (target === 'taskStreams') {
-    loadTaskStreamsPage();
-  } else if (target === 'customRecords') {
-    loadCustomRecordsPage();
   }
 }
 
@@ -497,24 +449,10 @@ function makeKeyboardActivatable(element, action, label) {
   });
 }
 
-function hashDeploymentIdentity(value) {
-  let hash = 2166136261;
-  const text = String(value || '');
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
-
-function getTaskDeploymentKey(task, streamUrl) {
+function getTaskDeploymentKey(task) {
   const season = task && task.type === 'series' ? (task.season ?? task.activeSeason ?? '-') : '-';
   const episode = task && task.type === 'series' ? (task.episode ?? task.activeEpisode ?? '-') : '-';
-  return `task:${task ? task.type : 'unknown'}:${task ? task.id : 'unknown'}:${season}:${episode}:${hashDeploymentIdentity(streamUrl)}`;
-}
-
-function getCustomRecordDeploymentKey(recordId) {
-  return `customRecord:${recordId}`;
+  return `task:${task ? task.type : 'unknown'}:${task ? task.id : 'unknown'}:${season}:${episode}`;
 }
 
 function getDeploymentDraftStorageKey(contextKey) {
@@ -554,11 +492,10 @@ function collectDeploymentDraft() {
   const quality = getCurrentVideoQuality();
 
   return {
-    version: 2,
-    kind: editingRecordId ? 'customRecord' : 'task',
+    version: 3,
+    kind: 'task',
     contextKey: activeDeploymentKey,
-    taskId: editingRecordId ? null : (currentTaskId ?? currentTaskContext.id),
-    recordId: editingRecordId || null,
+    taskId: currentTaskId ?? currentTaskContext.id,
     currentStreamItem: currentStreamItem || null,
     selectedStreamUrl: selectedStreamUrl || '',
     selectedAudioUrl: selectedAudio || '',
@@ -675,7 +612,7 @@ function applyDeploymentDraft(draft) {
     }
 
     if (displayStreamUrl) {
-      displayStreamUrl.textContent = selectedStreamUrl || 'No video source specified yet. Please enter a custom video path/URL below.';
+      displayStreamUrl.textContent = selectedStreamUrl || 'Select a detected media source to preview or deploy it.';
     }
   } finally {
     isRestoringDeploymentDraft = false;
@@ -684,33 +621,11 @@ function applyDeploymentDraft(draft) {
 
 function restorePlayerDeployView(state) {
   const restoreFromDraft = (draft) => {
-    if (draft && draft.kind === 'customRecord' && draft.recordId) {
-      chrome.storage.local.get(['custom_records'], (recordResult) => {
-        const records = recordResult.custom_records || [];
-        const record = records.find((item) => item.id == draft.recordId);
-        if (record) {
-          openCustomRecordInDeployPage(record, draft);
-        } else {
-          switchView('customRecords');
-        }
-      });
-      return;
-    }
-
     const taskId = draft && draft.taskId != null ? draft.taskId : state.currentTaskId;
     chrome.storage.local.get(['scanned_tasks'], (taskResult) => {
       const tasks = taskResult.scanned_tasks || [];
       const task = tasks.find((item) => item.id == taskId);
-      let streamItem = draft && draft.currentStreamItem ? draft.currentStreamItem : state.currentStreamItem;
-      if (!streamItem && draft && draft.selectedStreamUrl) {
-        streamItem = {
-          videoUrl: draft.selectedStreamUrl,
-          label: 'Saved selection',
-          quality: draft.selectedQuality || 'Unknown'
-        };
-      }
-
-      if (!task || !streamItem) {
+      if (!task) {
         switchView('dashboard');
         return;
       }
@@ -739,10 +654,9 @@ function restorePlayerDeployView(state) {
         };
       }
 
-      currentStreamItem = streamItem;
       selectedStreamUrl = draft && typeof draft.selectedStreamUrl === 'string' ? draft.selectedStreamUrl : state.selectedStreamUrl;
       selectedAudioUrl = draft && typeof draft.selectedAudioUrl === 'string' ? draft.selectedAudioUrl : state.selectedAudioUrl;
-      openPlayerDeployPage(renderTask, streamItem, rawUrls, null, draft || null);
+      openPlayerDeployPage(renderTask, null, rawUrls, null, draft || null);
     });
   };
 
@@ -814,6 +728,21 @@ function loadDashboardPage() {
   });
 }
 
+function openStoredTaskDeployment(taskId) {
+  chrome.storage.local.get(['scanned_tasks'], (result) => {
+    const tasks = result.scanned_tasks || [];
+    const task = tasks.find((item) => item.id == taskId);
+    if (!task) {
+      switchView('dashboard');
+      return;
+    }
+
+    currentTaskId = task.id;
+    const renderTask = getScopedTaskForRendering(task);
+    openPlayerDeployPage(renderTask, null, renderTask.rawStreams || []);
+  });
+}
+
 function renderDashboardTasks() {
   if (!tasksContainer) return;
   tasksContainer.innerHTML = '';
@@ -862,7 +791,7 @@ function renderDashboardTasks() {
       if (task.type === 'series') {
         openTvDetailsPage(task);
       } else {
-        switchView('taskStreams');
+        openPlayerDeployPage(task, null, task.rawStreams || []);
       }
     };
 
@@ -935,118 +864,6 @@ function toggleFavorite(taskId, url) {
     patterns = StreamLearning.recordFeedback(patterns, 'favorite', url, isAdding ? 1 : -1);
     chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns });
   });
-}
-
-function toggleTaggedVideo(taskId, url) {
-  chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
-    const tasks = result.scanned_tasks || [];
-    let patterns = StreamLearning.migratePatterns(result.learned_patterns, tasks);
-    const taskIndex = tasks.findIndex(t => t.id == taskId);
-    if (taskIndex === -1) return;
-
-    const task = tasks[taskIndex];
-    let isAdding = false;
-    let oldUrl = null;
-
-    if (task.type === 'series') {
-      const season = task.activeSeason || 1;
-      const episode = task.activeEpisode || 1;
-      const epKey = `${season}x${episode}`;
-      task.episodes = task.episodes || {};
-      task.episodes[epKey] = task.episodes[epKey] || { rawStreams: [] };
-      const epData = task.episodes[epKey];
-      if (epData.taggedVideoUrl === url) {
-        epData.taggedVideoUrl = null;
-      } else {
-        oldUrl = epData.taggedVideoUrl;
-        epData.taggedVideoUrl = url;
-        isAdding = true;
-      }
-    } else {
-      if (task.taggedVideoUrl === url) {
-        task.taggedVideoUrl = null;
-      } else {
-        oldUrl = task.taggedVideoUrl;
-        task.taggedVideoUrl = url;
-        isAdding = true;
-      }
-    }
-
-    if (oldUrl) patterns = StreamLearning.recordFeedback(patterns, 'video', oldUrl, -1);
-    patterns = StreamLearning.recordFeedback(patterns, 'video', url, isAdding ? 1 : -1);
-    chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns });
-  });
-}
-
-function toggleTaggedAudio(taskId, url) {
-  chrome.storage.local.get(['scanned_tasks', 'learned_patterns'], (result) => {
-    const tasks = result.scanned_tasks || [];
-    let patterns = StreamLearning.migratePatterns(result.learned_patterns, tasks);
-    const taskIndex = tasks.findIndex(t => t.id == taskId);
-    if (taskIndex === -1) return;
-
-    const task = tasks[taskIndex];
-    let isAdding = false;
-    let oldUrl = null;
-
-    if (task.type === 'series') {
-      const season = task.activeSeason || 1;
-      const episode = task.activeEpisode || 1;
-      const epKey = `${season}x${episode}`;
-      task.episodes = task.episodes || {};
-      task.episodes[epKey] = task.episodes[epKey] || { rawStreams: [] };
-      const epData = task.episodes[epKey];
-      if (epData.taggedAudioUrl === url) {
-        epData.taggedAudioUrl = null;
-      } else {
-        oldUrl = epData.taggedAudioUrl;
-        epData.taggedAudioUrl = url;
-        isAdding = true;
-      }
-    } else {
-      if (task.taggedAudioUrl === url) {
-        task.taggedAudioUrl = null;
-      } else {
-        oldUrl = task.taggedAudioUrl;
-        task.taggedAudioUrl = url;
-        isAdding = true;
-      }
-    }
-
-    if (oldUrl) patterns = StreamLearning.recordFeedback(patterns, 'audio', oldUrl, -1);
-    patterns = StreamLearning.recordFeedback(patterns, 'audio', url, isAdding ? 1 : -1);
-    chrome.storage.local.set({ scanned_tasks: tasks, learned_patterns: patterns });
-  });
-}
-
-function findStreamItem(task, url) {
-  if (!url) return null;
-  
-  let rawUrls = [];
-  if (task.type === 'series') {
-    const season = task.activeSeason || 1;
-    const episode = task.activeEpisode || 1;
-    const epKey = `${season}x${episode}`;
-    if (task.episodes && task.episodes[epKey]) {
-      rawUrls = task.episodes[epKey].rawStreams || [];
-    }
-  } else {
-    rawUrls = task.rawStreams || [];
-  }
-  
-  const { video, audio } = processRawStreams(rawUrls, task);
-  
-  // Search in video categories
-  for (const res in video) {
-    const found = video[res].find(item => (item.videoUrl || item.audioUrl) === url);
-    if (found) return found;
-  }
-  
-  // Search in audio
-  const foundAudio = audio.find(item => (item.videoUrl || item.audioUrl) === url);
-  if (foundAudio) return foundAudio;
-  
-  return null;
 }
 
 function openCreateTaskPanel() {
@@ -1160,7 +977,14 @@ function saveNewTask() {
     if (duplicateIndex !== -1) { displayError('A task for this title already exists.'); return; }
 
     tasks.push(newTask);
-    chrome.storage.local.set({ scanned_tasks: tasks }, () => { switchView('dashboard'); });
+    chrome.storage.local.set({ scanned_tasks: tasks }, () => {
+      currentTaskId = newTask.id;
+      if (newTask.type === 'series') {
+        openTvDetailsPage(newTask);
+      } else {
+        openPlayerDeployPage(newTask, null, []);
+      }
+    });
   });
 }
 
@@ -1169,6 +993,7 @@ function navigateBackToDashboard() { switchView('dashboard'); }
 function getScopedTaskForRendering(task) {
   if (!task) return null;
   if (task.type !== 'series') return task;
+  if (task.season != null && task.episode != null && Array.isArray(task.rawStreams) && !task.episodes) return task;
 
   const season = task.activeSeason || 1;
   const episode = task.activeEpisode || 1;
@@ -1196,87 +1021,64 @@ function getScopedTaskForRendering(task) {
   };
 }
 
-function loadTaskStreamsPage() {
-  chrome.storage.local.get(['scanned_tasks', 'activeTaskId', 'learned_patterns'], (result) => {
-    const tasks = result.scanned_tasks || [];
-    activeTaskId = result.activeTaskId || null;
-
-    const task = tasks.find(t => t.id == currentTaskId);
-    if (!task) { switchView('dashboard'); return; }
-
-    streamsPageTitle.textContent = task.title;
-    let metaText = `TMDB: ${task.id} · TYPE: ${task.type.toUpperCase()}`;
-    
-    if (task.type === 'series') {
-      const season = task.activeSeason || 1;
-      const episode = task.activeEpisode || 1;
-      metaText += ` · S${season.toString().padStart(2, '0')}E${episode.toString().padStart(2, '0')}`;
-    }
-    streamsPageMeta.textContent = metaText;
-
-    const isActive = (task.id == activeTaskId);
-    updateStreamsActivateButton(isActive);
-
-    btnStreamsActivate.onclick = () => { toggleActiveSessionInStreams(task.id); };
-    
-    const renderTask = getScopedTaskForRendering(task);
-    renderGroupedStreams(renderTask, result.learned_patterns, tasks);
-  });
+// Akıllı Çözünürlük ve Format Yakalama Helper'ı
+function updateDeploymentCaptureButton(isActive) {
+  if (!btnDeploymentSniff) return;
+  btnDeploymentSniff.dataset.active = isActive ? 'true' : 'false';
+  btnDeploymentSniff.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  btnDeploymentSniff.textContent = isActive ? 'Listening' : 'Start listening';
 }
 
-function updateStreamsActivateButton(isActive) {
-  if (!btnStreamsActivate) return;
-  btnStreamsActivate.dataset.active = isActive ? 'true' : 'false';
-  btnStreamsActivate.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+function updateDeploymentCaptureStatus() {
+  if (!deploymentCaptureStatus) return;
+  const isActive = currentTaskId != null && currentTaskId == activeTaskId;
+  const sourceCount = deploymentSourcesList
+    ? deploymentSourcesList.querySelectorAll('[data-source-url]').length
+    : 0;
+
   if (isActive) {
-    btnStreamsActivate.className = 'ember-state-toggle flex-shrink-0 px-2.5 py-1 focus:outline-none';
-    btnStreamsActivate.textContent = 'Listening';
+    deploymentCaptureStatus.textContent = sourceCount > 0
+      ? 'Listening for new media in the selected browser tab.'
+      : 'Listening. Start playback in the selected browser tab.';
   } else {
-    btnStreamsActivate.className = 'ember-state-toggle flex-shrink-0 px-2.5 py-1 focus:outline-none';
-    btnStreamsActivate.textContent = 'Start listening';
+    deploymentCaptureStatus.textContent = sourceCount > 0
+      ? 'Listening is paused. Existing detected media remains available.'
+      : 'Start listening in the source tab to detect media.';
   }
 }
 
-function toggleActiveSessionInStreams(id) {
-  const newActiveId = (activeTaskId == id) ? null : id;
+function toggleActiveDeploymentCapture() {
+  if (currentTaskId == null) return;
+  const newActiveId = (activeTaskId == currentTaskId) ? null : currentTaskId;
   chrome.storage.local.get(['scanned_tasks'], (result) => {
     const tasks = result.scanned_tasks || [];
     if (newActiveId === null) {
       chrome.action.setBadgeText({ text: '' });
       chrome.storage.local.set({ activeTaskId: null, activeTabId: null }, () => {
         activeTaskId = null;
-        updateStreamsActivateButton(false);
+        updateDeploymentCaptureButton(false);
+        updateDeploymentCaptureStatus();
       });
-    } else {
-      const activeTask = tasks.find(t => t.id == newActiveId);
-      let streamsCount = 0;
-      if (activeTask) {
-        if (activeTask.type === 'series') {
-          const season = activeTask.activeSeason || 1;
-          const episode = activeTask.activeEpisode || 1;
-          const epKey = `${season}x${episode}`;
-          streamsCount = (activeTask.episodes && activeTask.episodes[epKey] && activeTask.episodes[epKey].rawStreams)
-            ? activeTask.episodes[epKey].rawStreams.length
-            : 0;
-        } else {
-          streamsCount = activeTask.rawStreams ? activeTask.rawStreams.length : 0;
-        }
-      }
-      chrome.action.setBadgeText({ text: streamsCount > 0 ? streamsCount.toString() : '0' });
-      chrome.action.setBadgeBackgroundColor({ color: '#DC2626' });
-
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const activeTabId = tabs[0] ? tabs[0].id : null;
-        chrome.storage.local.set({ activeTaskId: newActiveId, activeTabId: activeTabId }, () => {
-          activeTaskId = newActiveId;
-          updateStreamsActivateButton(true);
-        });
-      });
+      return;
     }
+
+    const activeTask = tasks.find((task) => task.id == newActiveId);
+    const renderTask = getScopedTaskForRendering(activeTask);
+    const streamsCount = renderTask && Array.isArray(renderTask.rawStreams) ? renderTask.rawStreams.length : 0;
+    chrome.action.setBadgeText({ text: streamsCount > 0 ? streamsCount.toString() : '0' });
+    chrome.action.setBadgeBackgroundColor({ color: '#DC2626' });
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const activeTabId = tabs[0] ? tabs[0].id : null;
+      chrome.storage.local.set({ activeTaskId: newActiveId, activeTabId }, () => {
+        activeTaskId = newActiveId;
+        updateDeploymentCaptureButton(true);
+        updateDeploymentCaptureStatus();
+      });
+    });
   });
 }
 
-// Akıllı Çözünürlük ve Format Yakalama Helper'ı
 function getResolutionFromUrl(url) {
   const lowerUrl = url.toLowerCase();
   
@@ -1420,13 +1222,14 @@ function processRawStreams(rawUrls, task) {
 }
 
 function renderGroupedStreams(task, patterns = {}, learningTasks = scannedTasks) {
-  if (!streamsListContainer) return;
-  streamsListContainer.innerHTML = '';
+  if (!deploymentSourcesList) return;
+  deploymentSourcesList.innerHTML = '';
   
   const rawUrls = task.rawStreams || [];
   if (rawUrls.length === 0) {
-    streamsListContainer.innerHTML = `
-      <div class="flex flex-col items-center justify-center text-center p-6 bg-[#1E293B]/20 rounded-xl border border-slate-800 border-dashed py-12">
+    if (deploymentCaptureCount) deploymentCaptureCount.textContent = '0';
+    deploymentSourcesList.innerHTML = `
+      <div class="deployment-sources-empty">
         <svg class="w-8 h-8 text-slate-600 mb-2.5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.5 14h.5v.5a.5.5 0 00.5.5h.5v-.5a.5.5 0 00-.5-.5h-.5V13h.5a.5.5 0 00.5-.5v-.5a.5.5 0 00-.5-.5h-.5v.5a.5.5 0 00.5.5h.5zM2 13h10v2H2z"/>
         </svg>
@@ -1533,12 +1336,17 @@ function renderGroupedStreams(task, patterns = {}, learningTasks = scannedTasks)
 
     cat.items.forEach((item, index) => {
       const mirrorCard = document.createElement('div');
-      mirrorCard.className = 'group relative flex flex-col justify-between bg-[#1E293B] border border-slate-800/80 hover:border-cyan-500/50 p-3 rounded-lg cursor-pointer hover:shadow-lg transition-all duration-200';
       const targetUrl = item.videoUrl || item.audioUrl;
+      const isSelected = selectedStreamUrl === targetUrl;
+      mirrorCard.className = 'deployment-source-card group relative flex flex-col justify-between p-3 cursor-pointer transition-all duration-200';
+      mirrorCard.dataset.sourceUrl = targetUrl;
+      mirrorCard.dataset.sourceLabel = item.label;
+      mirrorCard.dataset.selected = isSelected ? 'true' : 'false';
+      mirrorCard.setAttribute('role', 'radio');
+      mirrorCard.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+      mirrorCard.setAttribute('aria-label', `${isSelected ? 'Selected' : 'Select'} ${item.label}`);
+      mirrorCard.tabIndex = 0;
       const isFavorite = favoritesList.includes(targetUrl);
-
-      const isVideoTagged = (task.taggedVideoUrl === targetUrl);
-      const isAudioTagged = (task.taggedAudioUrl === targetUrl);
 
       const starSvg = isFavorite 
         ? `<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>`
@@ -1548,17 +1356,11 @@ function renderGroupedStreams(task, patterns = {}, learningTasks = scannedTasks)
         <div class="flex items-center justify-between mb-1.5">
           <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Mirror Source #${index + 1}</span>
           <div class="flex items-center gap-1">
-            <button class="stream-action stream-action--video btn-tag-video ${isVideoTagged ? 'is-active' : ''} focus:outline-none" aria-label="${isVideoTagged ? 'Remove video tag' : 'Use as video source'}" title="${isVideoTagged ? 'Remove Video Tag' : 'Set as Video Source'}">
-              <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-            </button>
-            <button class="stream-action stream-action--audio btn-tag-audio ${isAudioTagged ? 'is-active' : ''} focus:outline-none" aria-label="${isAudioTagged ? 'Remove audio tag' : 'Use as audio source'}" title="${isAudioTagged ? 'Remove Audio Tag' : 'Set as Audio Source'}">
-              <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
-            </button>
-            <div class="w-px h-3 bg-slate-700 mx-0.5"></div>
+            <span class="deployment-source-selected-indicator" aria-hidden="true">${isSelected ? 'Selected' : 'Select'}</span>
             <button class="stream-action stream-action--favorite btn-favorite-stream ${isFavorite ? 'is-active' : ''} focus:outline-none" aria-label="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}" title="${isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}">
               ${starSvg}
             </button>
-            <button class="stream-action stream-action--danger btn-delete-stream focus:outline-none" aria-label="Delete captured source" title="Delete Captured Record">
+            <button class="stream-action stream-action--danger btn-delete-stream focus:outline-none" aria-label="Delete detected source" title="Delete detected source">
               <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
               </svg>
@@ -1578,26 +1380,23 @@ function renderGroupedStreams(task, patterns = {}, learningTasks = scannedTasks)
         toggleFavorite(task.id, targetUrl);
       });
 
-      const btnVideo = mirrorCard.querySelector('.btn-tag-video');
-      btnVideo.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleTaggedVideo(task.id, targetUrl);
-      });
-
-      const btnAudio = mirrorCard.querySelector('.btn-tag-audio');
-      btnAudio.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleTaggedAudio(task.id, targetUrl);
-      });
-
       const btnDel = mirrorCard.querySelector('.btn-delete-stream');
-      btnDel.addEventListener('click', (e) => {
+      btnDel.addEventListener('click', async (e) => {
         e.stopPropagation();
-        deleteStreamRecord(task.id, targetUrl);
+        if (selectedStreamUrl === targetUrl) clearDeploymentSourceSelection();
+        await deleteStreamRecord(task.id, targetUrl, {
+          season: task.season,
+          episode: task.episode
+        });
       });
 
-      mirrorCard.addEventListener('click', () => { openPlayerDeployPage(task, item, rawUrls); });
-      makeKeyboardActivatable(mirrorCard, () => { openPlayerDeployPage(task, item, rawUrls); }, `Review ${item.label}`);
+      const selectSource = () => selectDeploymentSource(task, item);
+      mirrorCard.addEventListener('click', selectSource);
+      mirrorCard.addEventListener('keydown', (event) => {
+        if (event.target !== mirrorCard || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        selectSource();
+      });
       contentWrapper.appendChild(mirrorCard);
     });
 
@@ -1618,54 +1417,136 @@ function renderGroupedStreams(task, patterns = {}, learningTasks = scannedTasks)
       }
     });
 
-    streamsListContainer.appendChild(accordion);
+    deploymentSourcesList.appendChild(accordion);
   });
-  updateDeployTaggedFooter(task, rawUrls);
+  const sourceCount = deploymentSourcesList.querySelectorAll('[data-source-url]').length;
+  if (deploymentCaptureCount) deploymentCaptureCount.textContent = String(sourceCount);
+  updateDeploymentCaptureStatus();
 }
 
-function updateDeployTaggedFooter(task, rawUrls) {
-  if (!streamsFooter || !btnDeployTagged) return;
-  if (task.taggedVideoUrl || task.taggedAudioUrl) {
-    streamsFooter.classList.remove('hidden');
-    // Store current task and urls globally so onDeployTaggedClick can access them
-    currentTaskContext = task;
-    availableStreams = rawUrls; // reuse variable
-  } else {
-    streamsFooter.classList.add('hidden');
+function getAvailableVideoItems() {
+  return Object.values(availableVideos || {}).flatMap((items) => Array.isArray(items) ? items : []);
+}
+
+function findAvailableVideoItem(url) {
+  if (!url) return null;
+  return getAvailableVideoItems().find((item) => (item.videoUrl || item.audioUrl) === url) || null;
+}
+
+function updateSourceDependentActions() {
+  const hasSelectedSource = Boolean(selectedStreamUrl);
+  const hasDeployableSource = hasSelectedSource || Boolean(customVideoInput && customVideoInput.value.trim());
+
+  if (btnPreviewStream) btnPreviewStream.disabled = !hasSelectedSource;
+  if (btnDownloadStream) btnDownloadStream.disabled = !hasSelectedSource;
+  if (btnDeployServer && btnDeployServer.dataset.state === 'idle') {
+    btnDeployServer.disabled = !hasDeployableSource;
   }
 }
 
-function onDeployTaggedClick() {
-  if (!currentTaskContext) return;
-  const videoUrl = currentTaskContext.taggedVideoUrl;
-  const audioUrl = currentTaskContext.taggedAudioUrl;
-  if (!videoUrl && !audioUrl) return;
-
-  const videoItem = findStreamItem(currentTaskContext, videoUrl);
-  const audioItem = findStreamItem(currentTaskContext, audioUrl);
-
-  // If only audio is tagged, we fallback to the audioUrl as the videoUrl (dummy), but ideally video is tagged.
-  const fallbackUrl = audioUrl || '';
-  const dummyVideo = videoItem || { 
-    videoUrl: fallbackUrl, 
-    label: 'No Video Selected',
-    quality: 'Unknown'
-  };
-
-  openPlayerDeployPage(currentTaskContext, dummyVideo, availableStreams, audioItem);
+function updateRenderedSourceSelection() {
+  if (!deploymentSourcesList) return;
+  deploymentSourcesList.querySelectorAll('[data-source-url]').forEach((card) => {
+    const isSelected = card.dataset.sourceUrl === selectedStreamUrl;
+    card.dataset.selected = isSelected ? 'true' : 'false';
+    card.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+    card.setAttribute('aria-label', `${isSelected ? 'Selected' : 'Select'} ${card.dataset.sourceLabel || 'media source'}`);
+    const indicator = card.querySelector('.deployment-source-selected-indicator');
+    if (indicator) indicator.textContent = isSelected ? 'Selected' : 'Select';
+  });
 }
 
-async function navigateBackToStreams() {
-  if (editingRecordId) {
-    await saveCustomRecordWithoutModal();
-    switchView('customRecords');
-  } else {
-    switchView('taskStreams');
+function clearDeploymentSourceSelection({ persist = true } = {}) {
+  currentStreamItem = null;
+  selectedStreamUrl = '';
+  if (playerPageMeta) playerPageMeta.textContent = 'No source selected';
+  if (displayStreamUrl) displayStreamUrl.textContent = 'Select a detected media source to preview or deploy it.';
+  updateRenderedSourceSelection();
+  updateSourceDependentActions();
+  if (persist) persistDeploymentDraft();
+}
+
+function selectDeploymentSource(task, item) {
+  if (!item) return;
+  currentTaskContext = task;
+  currentStreamItem = item;
+  selectedStreamUrl = item.videoUrl || item.audioUrl || '';
+  if (playerPageMeta) playerPageMeta.textContent = item.label || 'Selected source';
+  if (displayStreamUrl) displayStreamUrl.textContent = selectedStreamUrl;
+  setSelectedVideoQuality(item.quality);
+  updateRenderedSourceSelection();
+  updateSourceDependentActions();
+  persistDeploymentDraft();
+}
+
+function mergeLiveSubtitles(detectedSubtitles) {
+  const existingByUrl = new Map((availableSubtitles || [])
+    .filter((subtitle) => subtitle && subtitle.url)
+    .map((subtitle) => [subtitle.url, subtitle]));
+  const nextSubtitles = [];
+
+  (detectedSubtitles || []).forEach((subtitle) => {
+    if (!subtitle || !subtitle.url) return;
+    nextSubtitles.push(existingByUrl.has(subtitle.url)
+      ? { ...subtitle, ...existingByUrl.get(subtitle.url) }
+      : subtitle);
+    existingByUrl.delete(subtitle.url);
+  });
+
+  existingByUrl.forEach((subtitle) => {
+    if (subtitle.languageSource === 'manual') nextSubtitles.push(subtitle);
+  });
+  return nextSubtitles;
+}
+
+function refreshDeploymentWorkspace(task, patterns = {}, learningTasks = scannedTasks) {
+  const renderTask = getScopedTaskForRendering(task);
+  if (!renderTask) return;
+
+  const previousAudio = audioSelector ? audioSelector.value : selectedAudioUrl;
+  let stateChanged = false;
+  const parsed = processRawStreams(renderTask.rawStreams || [], renderTask);
+  currentTaskContext = renderTask;
+  availableAudios = parsed.audio;
+  availableVideos = parsed.video;
+  availableSubtitles = mergeLiveSubtitles(parsed.subtitles);
+
+  const selectedItem = findAvailableVideoItem(selectedStreamUrl);
+  if (selectedStreamUrl && !selectedItem) {
+    clearDeploymentSourceSelection({ persist: false });
+    stateChanged = true;
+  } else if (selectedItem) {
+    currentStreamItem = selectedItem;
+    if (playerPageMeta) playerPageMeta.textContent = selectedItem.label || 'Selected source';
+    if (displayStreamUrl) displayStreamUrl.textContent = selectedStreamUrl;
   }
+
+  populateAudioSelector();
+  if (audioSelector) {
+    const audioExists = Array.from(audioSelector.options).some((option) => option.value === previousAudio);
+    audioSelector.value = audioExists ? previousAudio : '';
+    selectedAudioUrl = audioSelector.value;
+    if (previousAudio && !audioExists) stateChanged = true;
+  }
+  populateSubtitles({ preserveSelection: true });
+  renderGroupedStreams(renderTask, patterns, learningTasks);
+  updateDeploymentCaptureButton(currentTaskId == activeTaskId);
+  updateSourceDependentActions();
+  if (stateChanged) persistDeploymentDraft();
 }
 
-function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, restoredDraft = undefined) {
-  editingRecordId = null;
+function navigateBackFromDeployment() {
+  chrome.storage.local.get(['scanned_tasks'], (result) => {
+    const task = (result.scanned_tasks || []).find((item) => item.id == currentTaskId);
+    if (task && task.type === 'series') {
+      openTvDetailsPage(task);
+    } else {
+      switchView('dashboard');
+    }
+  });
+}
+
+function openPlayerDeployPage(task, selectedItem = null, rawUrls = [], audioItem = null, restoredDraft = undefined) {
   currentTaskId = task.id;
   resetManualSkipMarkerEditor();
 
@@ -1680,16 +1561,14 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, res
   availableVideos = video;
   currentTaskContext = task;
 
-  // Set the selected stream URL and don't change it.
   currentStreamItem = selectedItem;
-  selectedStreamUrl = selectedItem.videoUrl || selectedItem.audioUrl || '';
+  selectedStreamUrl = selectedItem ? (selectedItem.videoUrl || selectedItem.audioUrl || '') : '';
   const preferredAudioUrl = audioItem ? (audioItem.videoUrl || audioItem.audioUrl || '') : '';
-  activeDeploymentKey = getTaskDeploymentKey(task, selectedStreamUrl);
+  activeDeploymentKey = getTaskDeploymentKey(task);
 
   playerPageTitle.textContent = task.title;
-  // Update UI with the clicked stream's info
-  playerPageMeta.textContent = selectedItem.label;
-  displayStreamUrl.textContent = selectedStreamUrl;
+  playerPageMeta.textContent = selectedItem ? selectedItem.label : 'No source selected';
+  displayStreamUrl.textContent = selectedStreamUrl || 'Select a detected media source to preview or deploy it.';
 
   playerMetaTmdb.textContent = task.id;
   playerMetaType.textContent = task.type;
@@ -1716,7 +1595,7 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, res
   }
 
   populateQualitySelector();
-  setSelectedVideoQuality(selectedItem.quality);
+  setSelectedVideoQuality(selectedItem ? selectedItem.quality : DEFAULT_VIDEO_QUALITY);
 
   populateAudioSelector();
   const preferredAudioExists = Array.from(audioSelector.options).some((option) => option.value === preferredAudioUrl);
@@ -1730,9 +1609,16 @@ function openPlayerDeployPage(task, selectedItem, rawUrls, audioItem = null, res
   const deploymentKey = activeDeploymentKey;
   const finishOpening = (draft) => {
     if (activeDeploymentKey !== deploymentKey) return;
-    applyDeploymentDraft(draft);
     switchView('playerDeploy');
-    persistDeploymentDraft();
+    applyDeploymentDraft(draft);
+    chrome.storage.local.get(['scanned_tasks', 'activeTaskId', 'learned_patterns'], (result) => {
+      if (activeDeploymentKey !== deploymentKey) return;
+      scannedTasks = result.scanned_tasks || [];
+      activeTaskId = result.activeTaskId || null;
+      const storedTask = scannedTasks.find((item) => item.id == currentTaskId);
+      refreshDeploymentWorkspace(storedTask || task, result.learned_patterns, scannedTasks);
+      persistDeploymentDraft();
+    });
     fetchSkipMarkersForDeployment({ force: true });
   };
 
@@ -2254,11 +2140,6 @@ async function deleteSubtitleTrack(url) {
   populateSubtitles({ preserveSelection: true });
   await persistDeploymentDraft();
 
-  if (editingRecordId) {
-    await saveCustomRecordWithoutModal();
-    return;
-  }
-
   if (currentTaskId != null) {
     await deleteStreamRecord(currentTaskId, url, {
       season: currentTaskContext && currentTaskContext.season,
@@ -2269,17 +2150,17 @@ async function deleteSubtitleTrack(url) {
 
 function resetDeployButtonState() {
   if (!btnDeployServer) return;
-  btnDeployServer.disabled = false;
   btnDeployServer.dataset.state = 'idle';
   btnDeployServer.className = 'ember-primary flex-1 py-2.5 px-3 flex items-center justify-center gap-1.5';
   iconDeployState.innerHTML = `
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
   `;
   textDeployState.textContent = 'Send to StreamHome';
+  updateSourceDependentActions();
 }
 
 function onPreviewClick() {
-  const targetUrl = selectedStreamUrl || selectedAudioUrl;
+  const targetUrl = selectedStreamUrl;
   if (!targetUrl) { displayError('No active stream URL selected.'); return; }
   
   const headers = (currentTaskContext.capturedHeaders && targetUrl) ? currentTaskContext.capturedHeaders[targetUrl] : {};
@@ -2303,7 +2184,7 @@ function onPreviewClick() {
 }
 
 function triggerStreamDownloads() {
-  const targetUrl = selectedStreamUrl || selectedAudioUrl;
+  const targetUrl = selectedStreamUrl;
   if (!targetUrl) { displayError('No active stream URL selected.'); return; }
   chrome.downloads.download({ url: targetUrl }, (downloadId) => {
     const error = chrome.runtime.lastError;
@@ -2312,10 +2193,6 @@ function triggerStreamDownloads() {
 }
 
 async function deployMetadataPayload() {
-  if (editingRecordId) {
-    await saveCustomRecordWithoutModal();
-  }
-
   const customVideo = customVideoInput ? customVideoInput.value.trim() : '';
   const customAudio = customAudioInput ? customAudioInput.value.trim() : '';
 
@@ -2409,13 +2286,7 @@ async function deployMetadataPayload() {
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
     `;
 
-    setTimeout(() => {
-      if (editingRecordId) {
-        switchView('customRecords');
-      } else {
-        switchView('taskStreams');
-      }
-    }, 1200);
+    setTimeout(resetDeployButtonState, 1600);
   })
   .catch((err) => {
     resetDeployButtonState();
@@ -2569,7 +2440,8 @@ function selectEpisode(seasonNumber, episodeNumber) {
     
     chrome.storage.local.set({ scanned_tasks: tasks }, () => {
       currentTaskId = task.id;
-      switchView('taskStreams');
+      const renderTask = getScopedTaskForRendering(task);
+      openPlayerDeployPage(renderTask, null, renderTask.rawStreams || []);
     });
   });
 }
@@ -2643,230 +2515,6 @@ function deleteStreamRecord(taskId, url, episodeScope = null) {
   });
 }
 
-// ==================== CUSTOM RECORDS SYSTEM ====================
-
-function loadCustomRecordsPage() {
-  chrome.storage.local.get(['custom_records'], (result) => {
-    const records = result.custom_records || [];
-    renderCustomRecords(records);
-  });
-}
-
-function renderCustomRecords(records) {
-  if (!customRecordsListContainer) return;
-  customRecordsListContainer.innerHTML = '';
-
-  if (records.length === 0) {
-    if (customRecordsEmptyState) customRecordsEmptyState.style.display = 'flex';
-    return;
-  }
-
-  if (customRecordsEmptyState) customRecordsEmptyState.style.display = 'none';
-
-  records.forEach((record) => {
-    const card = document.createElement('div');
-    card.className = 'bg-[#1E293B] border border-slate-800 p-4 rounded-xl transition-all duration-200 hover:border-slate-700/80 flex flex-col gap-2 relative overflow-hidden group cursor-pointer';
-    
-    const episodicInfo = record.media_type === 'tv' ? ` · S${record.season} E${record.episode}` : '';
-    const videoUrlDisplay = record.video_url || 'No Video Source';
-
-    card.innerHTML = `
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="w-9 h-9 rounded-lg bg-cyan-950/20 text-cyan-400 border border-cyan-800/30 flex items-center justify-center flex-shrink-0">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-            </svg>
-          </div>
-          <div class="flex flex-col min-w-0">
-            <span class="font-bold text-sm text-slate-100 truncate max-w-[210px] group-hover:text-cyan-300 transition-colors">${record.name}</span>
-            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mt-0.5">${record.title}${episodicInfo}</span>
-          </div>
-        </div>
-        <button class="btn-delete-record ember-danger-icon p-1.5 focus:outline-none flex-shrink-0" title="Delete Record">
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-          </svg>
-        </button>
-      </div>
-      <div class="text-[9px] font-mono text-cyan-300/80 truncate break-all bg-slate-900/40 p-2 rounded-md border border-slate-850/50 mt-1 leading-normal max-w-full">
-        ${videoUrlDisplay}
-      </div>
-      <div class="flex flex-wrap gap-1.5 mt-1">
-        <span class="text-[8px] font-extrabold text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700/40 capitalize">${record.media_type === 'tv' ? 'tv series' : 'movie'}</span>
-        <span class="text-[8px] font-extrabold text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-900/30 uppercase">${record.quality || 'unknown'}</span>
-        <span class="text-[8px] font-extrabold text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700/40 uppercase">${record.language || 'en'}</span>
-        ${record.subtitles && record.subtitles.length > 0 ? `<span class="text-[8px] font-extrabold text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-900/30 uppercase">${record.subtitles.length} Sub(s)</span>` : ''}
-      </div>
-    `;
-
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-delete-record')) return;
-      openCustomRecordInDeployPage(record);
-    });
-    makeKeyboardActivatable(card, () => { openCustomRecordInDeployPage(record); }, `Open saved deployment ${record.name}`);
-
-    const btnDel = card.querySelector('.btn-delete-record');
-    btnDel.addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteCustomRecord(record.id);
-    });
-
-    customRecordsListContainer.appendChild(card);
-  });
-}
-
-function deleteCustomRecord(id) {
-  chrome.storage.local.get(['custom_records'], (result) => {
-    let records = result.custom_records || [];
-    records = records.filter(r => r.id != id);
-    chrome.storage.local.set({ custom_records: records }, () => {
-      loadCustomRecordsPage();
-    });
-  });
-}
-
-function openCustomRecordInDeployPage(record, restoredDraft = undefined) {
-  editingRecordId = record.id;
-  currentTaskId = null;
-  currentStreamItem = null;
-  activeDeploymentKey = getCustomRecordDeploymentKey(record.id);
-  resetManualSkipMarkerEditor();
-
-  // Setup mock task context
-  currentTaskContext = {
-    id: record.tmdb_id,
-    title: record.title,
-    type: record.media_type === 'tv' ? 'series' : 'movie',
-    capturedHeaders: {}
-  };
-
-  selectedStreamUrl = record.video_url || '';
-  selectedAudioUrl = record.audio_url || '';
-  selectedQuality = normalizeVideoQuality(record.quality) || DEFAULT_VIDEO_QUALITY;
-  availableAudios = [];
-  availableVideos = {};
-
-  // UI elements
-  playerPageTitle.textContent = record.title;
-  playerPageMeta.textContent = `Saved deployment · ${record.name}`;
-  displayStreamUrl.textContent = selectedStreamUrl || 'No video source specified yet. Please enter a custom video path/URL below.';
-
-  playerMetaTmdb.textContent = record.tmdb_id;
-  playerMetaType.textContent = record.media_type;
-
-  if (customVideoInput) customVideoInput.value = record.video_url || '';
-  if (customAudioInput) customAudioInput.value = record.audio_url || '';
-  if (inputCustomSubUrl) inputCustomSubUrl.value = '';
-  if (inputCustomSubLang) inputCustomSubLang.value = '';
-
-  populateLanguageSelector();
-  populateQualitySelector();
-  populateAudioSelector();
-
-  setSelectedVideoQuality(selectedQuality);
-
-  if (languageSelector) {
-    languageSelector.value = record.language || 'en';
-  }
-
-  // Episodic controls
-  if (record.media_type === 'tv') {
-    if (deployEpisodicInputsWrapper) deployEpisodicInputsWrapper.classList.remove('hidden');
-    if (deploySeasonInput) {
-      deploySeasonInput.disabled = false;
-      deploySeasonInput.classList.remove('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
-      deploySeasonInput.value = record.season ?? '';
-    }
-    if (deployEpisodeInput) {
-      deployEpisodeInput.disabled = false;
-      deployEpisodeInput.classList.remove('bg-[#1E293B]/50', 'text-slate-500', 'cursor-not-allowed');
-      deployEpisodeInput.value = record.episode ?? '';
-    }
-  } else {
-    if (deployEpisodicInputsWrapper) deployEpisodicInputsWrapper.classList.add('hidden');
-  }
-
-  // Populate subtitles checkboxes
-  availableSubtitles = record.subtitles || [];
-  populateSubtitles();
-
-  resetDeployButtonState();
-  const deploymentKey = activeDeploymentKey;
-  const finishOpening = (draft) => {
-    if (activeDeploymentKey !== deploymentKey) return;
-    applyDeploymentDraft(draft);
-    switchView('playerDeploy');
-    persistDeploymentDraft();
-    fetchSkipMarkersForDeployment({ force: true });
-  };
-
-  if (restoredDraft !== undefined) {
-    finishOpening(restoredDraft);
-  } else {
-    loadDeploymentDraft(deploymentKey, finishOpening);
-  }
-}
-
-function saveCustomRecordWithoutModal() {
-  if (!editingRecordId) return Promise.resolve();
-
-  const customVideo = customVideoInput ? customVideoInput.value.trim() : '';
-  const customAudio = customAudioInput ? customAudioInput.value.trim() : '';
-
-  const finalStreamUrl = customVideo || selectedStreamUrl;
-  const finalAudioUrl = customAudio || (audioSelector ? audioSelector.value : '');
-
-  const selectedLanguage = languageSelector ? languageSelector.value : 'en';
-  const selectedSubtitles = [];
-  if (subtitlesList) {
-    const subtitleCheckboxes = subtitlesList.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)');
-    subtitleCheckboxes.forEach(checkbox => {
-      const code = checkbox.dataset.lang || 'en';
-      selectedSubtitles.push({
-        lang: code,
-        language: code,
-        url: checkbox.value,
-        label: code.toUpperCase()
-      });
-    });
-  }
-
-  const mediaType = playerMetaType ? playerMetaType.textContent : 'movie';
-  let season = null;
-  let episode = null;
-
-  if (mediaType === 'tv' || mediaType === 'series') {
-    if (deploySeasonInput) season = parseInt(deploySeasonInput.value, 10);
-    if (deployEpisodeInput) episode = parseInt(deployEpisodeInput.value, 10);
-    if (isNaN(season) || season === null || isNaN(episode) || episode === null) {
-      season = 1;
-      episode = 1;
-    }
-  }
-
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['custom_records'], (result) => {
-      const records = result.custom_records || [];
-      const idx = records.findIndex(r => r.id === editingRecordId);
-      if (idx === -1) {
-        resolve();
-        return;
-      }
-
-      records[idx].video_url = finalStreamUrl;
-      records[idx].audio_url = finalAudioUrl;
-      records[idx].quality = getCurrentVideoQuality();
-      records[idx].language = selectedLanguage;
-      records[idx].subtitles = selectedSubtitles;
-      records[idx].season = season;
-      records[idx].episode = episode;
-
-      chrome.storage.local.set({ custom_records: records }, resolve);
-    });
-  });
-}
-
 function addCustomSubtitleTrack() {
   if (!inputCustomSubUrl || !inputCustomSubLang) return;
   const url = inputCustomSubUrl.value.trim();
@@ -2905,159 +2553,6 @@ function addCustomSubtitleTrack() {
     });
   }
   persistDeploymentDraft();
-}
-
-// ==================== CREATE CUSTOM RECORD FLOW ====================
-
-function openCreateCustomRecordModal() {
-  if (!modalCreateCustomRecord) return;
-  
-  // Clear inputs
-  if (inputCreateRecordName) inputCreateRecordName.value = '';
-  if (inputCreateRecordSearch) inputCreateRecordSearch.value = '';
-  if (createRecordTmdbSuggestions) {
-    createRecordTmdbSuggestions.innerHTML = '';
-    createRecordTmdbSuggestions.classList.add('hidden');
-  }
-  if (createRecordTypeWrapper) createRecordTypeWrapper.classList.add('hidden');
-  
-  selectedCreateTmdbId = null;
-  selectedCreateTitle = '';
-  selectedCreateType = '';
-  
-  modalCreateCustomRecord.classList.remove('hidden');
-  if (inputCreateRecordName) inputCreateRecordName.focus();
-}
-
-function closeCreateCustomRecordModal() {
-  if (modalCreateCustomRecord) modalCreateCustomRecord.classList.add('hidden');
-}
-
-function initCreateRecordSearch() {
-  if (!inputCreateRecordSearch) return;
-  inputCreateRecordSearch.addEventListener('input', () => {
-    clearTimeout(createSearchDebounceTimer);
-    const query = inputCreateRecordSearch.value.trim();
-    if (query.length < 2) {
-      createRecordTmdbSuggestions.innerHTML = '';
-      createRecordTmdbSuggestions.classList.add('hidden');
-      return;
-    }
-    createSearchDebounceTimer = setTimeout(() => { fetchCreateRecordSuggestions(query); }, 300);
-  });
-
-  document.addEventListener('click', (e) => {
-    if (e.target !== inputCreateRecordSearch && e.target !== createRecordTmdbSuggestions) {
-      if (createRecordTmdbSuggestions) createRecordTmdbSuggestions.classList.add('hidden');
-    }
-  });
-}
-
-async function fetchCreateRecordSuggestions(query) {
-  if (!savedTmdbApiKey) { displayError('TMDB API Key missing. Please reconnect credentials.'); return; }
-  const url = `https://api.themoviedb.org/3/search/multi?api_key=${savedTmdbApiKey}&query=${encodeURIComponent(query)}&language=en-US`;
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(translateHttpStatus(response.status));
-    const data = await response.json();
-    renderCreateRecordSuggestions(data.results || []);
-  } catch (err) {
-    console.error("[DEBUG] TMDB Fetch Error:", err);
-    displayError(err.message || 'Failed to search TMDB titles.');
-  }
-}
-
-function renderCreateRecordSuggestions(results) {
-  if (!createRecordTmdbSuggestions) return;
-  createRecordTmdbSuggestions.innerHTML = '';
-
-  const filtered = results.filter(item => item.media_type === 'movie' || item.media_type === 'tv');
-  if (filtered.length === 0) {
-    createRecordTmdbSuggestions.classList.add('hidden');
-    return;
-  }
-
-  filtered.slice(0, 5).forEach(item => {
-    const title = item.title || item.name || 'Unknown Title';
-    const year = (item.release_date || item.first_air_date || '').split('-')[0];
-    const yrStr = year ? ` (${year})` : '';
-    const typeLabel = item.media_type === 'tv' ? 'TV' : 'Movie';
-
-    const div = document.createElement('div');
-    div.className = 'px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 cursor-pointer border-b border-slate-850/60 last:border-0 truncate';
-    div.innerHTML = `
-      <div class="font-bold truncate">${title}${yrStr}</div>
-      <div class="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5">${typeLabel}</div>
-    `;
-
-    div.addEventListener('click', () => {
-      selectCreateRecordItem(item, title);
-    });
-
-    createRecordTmdbSuggestions.appendChild(div);
-  });
-
-  createRecordTmdbSuggestions.classList.remove('hidden');
-}
-
-function selectCreateRecordItem(item, title) {
-  selectedCreateTmdbId = item.id;
-  selectedCreateTitle = title;
-  selectedCreateType = item.media_type; // 'tv' or 'movie'
-
-  if (createRecordTypeIndicator) {
-    createRecordTypeIndicator.textContent = selectedCreateType === 'tv' ? 'TV / Series' : 'Movie';
-  }
-  if (createRecordTypeWrapper) {
-    createRecordTypeWrapper.classList.remove('hidden');
-  }
-  if (createRecordTmdbSuggestions) {
-    createRecordTmdbSuggestions.innerHTML = '';
-    createRecordTmdbSuggestions.classList.add('hidden');
-  }
-  if (inputCreateRecordSearch) {
-    inputCreateRecordSearch.value = title;
-  }
-}
-
-function saveNewCustomRecord() {
-  if (!inputCreateRecordName || !selectedCreateTmdbId || !selectedCreateTitle) {
-    displayError('Please enter a record name and select a valid title from TMDB suggestions.');
-    return;
-  }
-
-  const name = inputCreateRecordName.value.trim();
-  if (!name) {
-    displayError('Please specify a name for the custom record.');
-    return;
-  }
-
-  chrome.storage.local.get(['custom_records'], (result) => {
-    const records = result.custom_records || [];
-    
-    // Create new record with empty media fields but complete metadata
-    const newRec = {
-      id: 'rec_' + Date.now(),
-      name: name,
-      tmdb_id: selectedCreateTmdbId,
-      title: selectedCreateTitle,
-      media_type: selectedCreateType === 'tv' ? 'tv' : 'movie',
-      season: 1, // default
-      episode: 1, // default
-      video_url: '',
-      audio_url: '',
-      quality: DEFAULT_VIDEO_QUALITY,
-      language: 'en',
-      subtitles: []
-    };
-
-    records.push(newRec);
-
-    chrome.storage.local.set({ custom_records: records }, () => {
-      closeCreateCustomRecordModal();
-      loadCustomRecordsPage(); // refresh custom records page
-    });
-  });
 }
 
 function translateHttpStatus(status) {

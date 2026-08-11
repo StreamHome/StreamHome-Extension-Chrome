@@ -118,11 +118,6 @@
         </div>
       </div>
       <div class="flex items-center gap-1">
-        <button id="btn-custom-records-nav" type="button" aria-label="Open saved deployments" class="ember-icon-button p-1.5 focus:outline-none" title="Saved deployments">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-          </svg>
-        </button>
         <button id="btn-dashboard-settings" type="button" aria-label="Disconnect from StreamHome" class="ember-icon-button ember-danger-icon p-1.5 focus:outline-none" title="Disconnect">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
@@ -217,40 +212,7 @@
     </div>
   </div>
 
-  <!-- ==================== PAGE 2: THE TASK STREAMS GROUPING PAGE ==================== -->
-  <div id="page-task-streams" class="view-transition view-hidden w-full h-full flex flex-col">
-    <!-- Header -->
-    <header class="app-header flex items-center gap-3 px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
-      <button id="btn-streams-back" type="button" aria-label="Go back" class="ember-icon-button p-1.5 focus:outline-none">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-        </svg>
-      </button>
-      <div class="flex flex-col min-w-0 flex-1">
-        <span id="streams-page-title" class="app-title font-bold text-sm text-white truncate leading-tight">Capture target</span>
-        <span id="streams-page-meta" class="app-meta text-[9px] text-slate-500 font-bold mt-0.5 uppercase tracking-wide">Awaiting metadata</span>
-      </div>
-      <button id="btn-streams-activate" type="button" class="ember-state-toggle flex-shrink-0 px-2 py-1 focus:outline-none">Start listening</button>
-    </header>
-
-    <!-- Captured Streams Scroller -->
-    <div class="app-scroll flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-      <div id="streams-list-container" class="space-y-4"></div>
-    </div>
-
-    <!-- Actions Footer -->
-    <footer id="streams-footer" class="app-footer hidden p-4 border-t border-slate-800 bg-[#1E293B]/20 flex gap-2 flex-shrink-0 transition-all">
-      <button id="btn-deploy-tagged" class="ember-primary flex-1 py-2.5 px-3 flex items-center justify-center gap-1.5" title="Deploy Selected Streams">
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <span class="truncate">Review tagged sources</span>
-      </button>
-    </footer>
-  </div>
-
-  <!-- ==================== PAGE 3: THE DEPLOYMENT CONTROL PAGE ==================== -->
+  <!-- ==================== PAGE 2: THE LIVE DEPLOYMENT WORKSPACE ==================== -->
   <div id="page-player-deploy" class="view-transition view-hidden w-full h-full flex flex-col">
     <!-- Header -->
     <header class="app-header flex items-center gap-3 px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
@@ -261,12 +223,24 @@
       </button>
       <div class="flex flex-col min-w-0 flex-1">
         <span id="player-page-title" class="app-title font-bold text-sm text-white truncate leading-tight">Review deployment</span>
-        <span id="player-page-meta" class="app-meta text-[9px] text-cyan-400 font-bold mt-0.5 uppercase tracking-wide">Selected source</span>
+        <span id="player-page-meta" class="app-meta text-[9px] text-cyan-400 font-bold mt-0.5 uppercase tracking-wide">No source selected</span>
       </div>
+      <button id="btn-deployment-sniff" type="button" class="ember-state-toggle flex-shrink-0 px-2.5 py-1 focus:outline-none" aria-pressed="false">Start listening</button>
     </header>
 
     <!-- Interactive Workspace -->
     <div class="app-scroll flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <section id="deployment-capture-panel" class="deploy-section deployment-capture-panel" aria-labelledby="deployment-capture-title">
+        <div class="deployment-capture-heading">
+          <div>
+            <span id="deployment-capture-title" class="deployment-capture-title">Detected media</span>
+            <span id="deployment-capture-status" class="deployment-capture-status" aria-live="polite">Start listening in the source tab to detect media.</span>
+          </div>
+          <span id="deployment-capture-count" class="deployment-capture-count">0</span>
+        </div>
+        <div id="deployment-sources-list" class="deployment-sources-list" role="radiogroup" aria-label="Detected media sources" aria-live="polite"></div>
+      </section>
+
       <!-- Info Cards Grid -->
       <div class="grid grid-cols-2 gap-3.5">
         <div class="deploy-panel bg-[#1E293B]/40 border border-slate-800 p-3 rounded-xl">
@@ -414,102 +388,26 @@
 
     <!-- Actions Footer -->
     <footer class="app-footer p-4 border-t border-slate-800 bg-[#1E293B]/20 flex gap-2 flex-shrink-0">
-      <button id="btn-deploy-server" data-state="idle" class="ember-primary flex-1 py-2.5 px-3 flex items-center justify-center gap-1.5" title="Deploy Folder to Server">
+      <button id="btn-deploy-server" data-state="idle" class="ember-primary flex-1 py-2.5 px-3 flex items-center justify-center gap-1.5" title="Deploy Folder to Server" disabled>
         <svg id="icon-deploy-state" class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
         </svg>
         <span id="text-deploy-state" class="truncate">Send to StreamHome</span>
       </button>
-      <button id="btn-preview-stream" class="ember-secondary py-2.5 px-3 flex items-center justify-center gap-1.5" title="Preview Stream">
+      <button id="btn-preview-stream" class="ember-secondary py-2.5 px-3 flex items-center justify-center gap-1.5" title="Preview Stream" disabled>
         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         <span class="truncate">Preview</span>
       </button>
-      <button id="btn-download-stream" class="ember-secondary py-2.5 px-3 flex items-center justify-center gap-1.5" title="Download Stream">
+      <button id="btn-download-stream" class="ember-secondary py-2.5 px-3 flex items-center justify-center gap-1.5" title="Download Stream" disabled>
         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
         </svg>
         <span class="truncate">Download</span>
       </button>
     </footer>
-  </div>
-
-  <!-- ==================== PAGE 4: THE CUSTOM RECORDS SECTION ==================== -->
-  <div id="page-custom-records" class="view-transition view-hidden w-full h-full flex flex-col">
-    <!-- Header -->
-    <header class="app-header flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-[#1E293B]/40 backdrop-blur flex-shrink-0">
-      <div class="flex items-center gap-3 min-w-0">
-        <button id="btn-custom-records-back" type="button" aria-label="Go back" class="ember-icon-button p-1.5 focus:outline-none flex-shrink-0">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-          </svg>
-        </button>
-        <div class="flex flex-col min-w-0">
-          <span class="app-title font-bold text-sm text-white truncate leading-tight">Saved deployments</span>
-          <span class="app-meta text-[9px] text-cyan-400 font-bold mt-0.5 uppercase tracking-wide">Reusable source presets</span>
-        </div>
-      </div>
-      <button id="btn-custom-records-add" type="button" aria-label="Create a saved deployment" class="ember-icon-button p-1.5 focus:outline-none flex-shrink-0" title="Create saved deployment">
-        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-        </svg>
-      </button>
-    </header>
-
-    <!-- Scrollable Records Container -->
-    <div class="app-scroll flex-1 overflow-y-auto p-4 custom-scrollbar">
-      <div id="custom-records-list-container" class="space-y-3"></div>
-
-      <!-- Empty State -->
-      <div id="custom-records-empty-state" class="empty-state hidden flex-col items-center justify-center text-center py-16 px-4">
-        <div class="w-12 h-12 rounded-full bg-slate-800/50 flex items-center justify-center text-slate-500 mb-3 border border-slate-700/30">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-          </svg>
-        </div>
-        <span class="text-xs font-bold text-slate-400">No saved deployments</span>
-        <span class="text-[10px] text-slate-500 mt-1 max-w-[200px]">Create a reusable preset for a local file or custom source, then review and send it whenever you need.</span>
-      </div>
-    </div>
-  </div>
-
-
-
-  <!-- ==================== DIALOG: CREATE CUSTOM RECORD MODAL ==================== -->
-  <div id="modal-create-custom-record" role="dialog" aria-modal="true" aria-labelledby="create-record-title" class="absolute inset-0 bg-[#0F172A]/80 backdrop-blur flex items-center justify-center z-50 hidden">
-    <div class="bg-[#1E293B] border border-slate-800 w-[300px] p-5 rounded-2xl shadow-2xl flex flex-col gap-4">
-      <div class="flex flex-col gap-1">
-        <span id="create-record-title" class="modal-title text-xs font-extrabold text-white">Create saved deployment</span>
-        <span class="ember-subcopy text-[10px] text-slate-400">Give this preset a name and connect it to the correct TMDB title.</span>
-      </div>
-      
-      <!-- Record Name -->
-      <div class="space-y-1">
-        <label for="input-create-record-name" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Preset name</label>
-        <input type="text" id="input-create-record-name" placeholder="e.g. Fight Club Custom" class="w-full bg-[#0F172A] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors text-slate-100" />
-      </div>
-
-      <!-- TMDB Media Search -->
-      <div class="space-y-1 relative">
-        <label for="input-create-record-search" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">TMDB title</label>
-        <input type="text" id="input-create-record-search" placeholder="Type name (English)..." autocomplete="off" class="w-full bg-[#0F172A] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors text-slate-100" />
-        <div id="create-record-tmdb-suggestions" class="absolute z-50 left-0 right-0 top-full mt-1 bg-[#1E293B] border border-slate-800 rounded-lg shadow-xl max-h-32 overflow-y-auto custom-scrollbar hidden"></div>
-      </div>
-
-      <!-- Type indicator -->
-      <div id="create-record-type-wrapper" class="hidden flex items-center justify-between bg-[#0F172A] border border-slate-850 p-2 rounded-lg">
-        <span class="text-[9px] text-slate-400 font-bold uppercase text-[9px]">Media Type</span>
-        <span id="create-record-type-indicator" class="text-[9px] font-extrabold text-cyan-400 uppercase tracking-wider bg-cyan-950/80 border border-cyan-800/40 px-1.5 py-0.5 rounded">Movie</span>
-      </div>
-
-      <!-- Action Buttons -->
-      <div class="flex gap-2 mt-2">
-        <button id="btn-modal-create-cancel" class="ember-secondary flex-1 py-2">Cancel</button>
-        <button id="btn-modal-create-save" class="ember-primary flex-1 py-2">Create</button>
-      </div>
-    </div>
   </div>
 
   <script src="stream-learning.js"></script>
