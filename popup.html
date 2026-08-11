@@ -87,8 +87,8 @@
         <input type="url" id="input-server-url" placeholder="http://localhost:8000" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
       </div>
       <div class="space-y-1">
-        <label for="input-api-key" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ingestion access token</label>
-        <input type="password" id="input-api-key" placeholder="Enter authentication token" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
+        <label for="input-api-key" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">StreamHome integration key</label>
+        <input type="password" id="input-api-key" placeholder="Enter an ingest-scoped key" class="w-full bg-[#1E293B] border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-cyan-500 transition-colors" />
       </div>
       <div class="space-y-1">
         <label for="input-tmdb-api-key" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">TMDB API key (v3)</label>
@@ -228,8 +228,14 @@
       <button id="btn-deployment-sniff" type="button" class="ember-state-toggle flex-shrink-0 px-2.5 py-1 focus:outline-none" aria-pressed="false">Start listening</button>
     </header>
 
+    <div id="deployment-mode-tabs" class="deployment-mode-tabs" role="tablist" aria-label="Deployment mode">
+      <button id="btn-mode-ingestion" type="button" class="deployment-mode-tab" role="tab" aria-selected="true" aria-controls="ingestion-workspace">New ingestion</button>
+      <button id="btn-mode-metadata" type="button" class="deployment-mode-tab" role="tab" aria-selected="false" aria-controls="metadata-workspace" tabindex="-1">Edit playback</button>
+    </div>
+
     <!-- Interactive Workspace -->
     <div class="app-scroll flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <div id="ingestion-workspace" class="space-y-4" role="tabpanel" aria-labelledby="btn-mode-ingestion">
       <section id="deployment-capture-panel" class="deploy-section deployment-capture-panel" aria-labelledby="deployment-capture-title">
         <div class="deployment-capture-heading">
           <div>
@@ -390,15 +396,94 @@
           <div id="manual-skip-markers-list" class="manual-skip-markers-list"></div>
         </div>
       </section>
+      </div>
+
+      <div id="metadata-workspace" class="metadata-workspace hidden" role="tabpanel" aria-labelledby="btn-mode-metadata">
+        <section id="metadata-target-panel" class="metadata-target-panel" data-state="idle" aria-labelledby="metadata-target-title">
+          <div class="metadata-panel-heading">
+            <div>
+              <span id="metadata-target-title" class="metadata-panel-title">StreamHome target</span>
+              <span id="metadata-target-status" class="metadata-panel-status" aria-live="polite">Select Edit playback to load server-owned playback metadata.</span>
+            </div>
+            <button id="btn-metadata-refresh" type="button" class="ember-inline-action">Refresh</button>
+          </div>
+          <div class="metadata-target-identity">
+            <code id="metadata-target-id">-</code>
+            <span>Completed canonical media required</span>
+          </div>
+        </section>
+
+        <section id="metadata-markers-panel" class="metadata-editor-panel" data-state="idle" aria-labelledby="metadata-markers-title">
+          <div class="metadata-panel-heading">
+            <div>
+              <span id="metadata-markers-title" class="metadata-panel-title">Skip markers</span>
+              <span id="metadata-markers-status" class="metadata-panel-status" aria-live="polite">Load metadata before editing markers.</span>
+            </div>
+          </div>
+          <div id="metadata-markers-list" class="metadata-track-list"></div>
+          <div class="metadata-marker-fields">
+            <label for="metadata-marker-type"><span>Marker</span><select id="metadata-marker-type"><option value="intro">Intro</option><option value="recap">Recap</option><option value="credits">Credits</option><option value="preview">Preview</option></select></label>
+            <label for="metadata-marker-start"><span>Start</span><input id="metadata-marker-start" type="text" inputmode="numeric" autocomplete="off" placeholder="00:00:00" /></label>
+            <label for="metadata-marker-end"><span>End</span><input id="metadata-marker-end" type="text" inputmode="numeric" autocomplete="off" placeholder="00:00:00" /></label>
+          </div>
+          <p id="metadata-marker-error" class="metadata-editor-error" role="alert" hidden></p>
+          <div class="metadata-panel-actions">
+            <button id="btn-metadata-add-marker" type="button" class="ember-inline-action">Add range</button>
+            <button id="btn-metadata-replace-markers" type="button" class="ember-inline-action ember-inline-action--primary">Replace all</button>
+            <button id="btn-metadata-clear-markers" type="button" class="ember-inline-action ember-inline-action--danger">Clear all</button>
+          </div>
+        </section>
+
+        <section id="metadata-subtitles-panel" class="metadata-editor-panel" data-state="idle" aria-labelledby="metadata-subtitles-title">
+          <div class="metadata-panel-heading">
+            <div>
+              <span id="metadata-subtitles-title" class="metadata-panel-title">Subtitle sidecars</span>
+              <span id="metadata-subtitles-status" class="metadata-panel-status" aria-live="polite">Add, replace, or remove one application-owned track.</span>
+            </div>
+          </div>
+          <div id="metadata-subtitles-list" class="metadata-track-list"></div>
+          <div class="metadata-form-grid">
+            <label class="metadata-field-wide" for="metadata-subtitle-captured"><span>Captured source</span><select id="metadata-subtitle-captured"><option value="">Choose a detected subtitle</option></select></label>
+            <label for="metadata-subtitle-track-id"><span>Track ID</span><input id="metadata-subtitle-track-id" type="text" maxlength="64" autocomplete="off" placeholder="en-main" /></label>
+            <label for="metadata-subtitle-language"><span>Language</span><input id="metadata-subtitle-language" type="text" maxlength="35" autocomplete="off" placeholder="en" /></label>
+            <label class="metadata-field-wide" for="metadata-subtitle-label"><span>Label</span><input id="metadata-subtitle-label" type="text" maxlength="80" autocomplete="off" placeholder="English CC" /></label>
+            <label class="metadata-field-wide" for="metadata-subtitle-url"><span>Source URL</span><input id="metadata-subtitle-url" type="url" placeholder="https://media.example/subtitle.vtt" /></label>
+          </div>
+          <p id="metadata-subtitle-error" class="metadata-editor-error" role="alert" hidden></p>
+          <div class="metadata-panel-actions">
+            <button id="btn-metadata-save-subtitle" type="button" class="ember-inline-action ember-inline-action--primary">Add / replace</button>
+          </div>
+        </section>
+
+        <section id="metadata-audio-panel" class="metadata-editor-panel" data-state="idle" aria-labelledby="metadata-audio-title">
+          <div class="metadata-panel-heading">
+            <div>
+              <span id="metadata-audio-title" class="metadata-panel-title">Dubbing sidecars</span>
+              <span id="metadata-audio-status" class="metadata-panel-status" aria-live="polite">Add, replace, or remove one external language.</span>
+            </div>
+          </div>
+          <div id="metadata-audio-list" class="metadata-track-list"></div>
+          <div class="metadata-form-grid">
+            <label class="metadata-field-wide" for="metadata-audio-captured"><span>Captured source</span><select id="metadata-audio-captured"><option value="">Choose a detected dubbing track</option></select></label>
+            <label for="metadata-audio-language"><span>Language</span><input id="metadata-audio-language" type="text" maxlength="35" autocomplete="off" placeholder="tr" /></label>
+            <label for="metadata-audio-source-type"><span>Source type</span><select id="metadata-audio-source-type"><option value="auto">Auto</option><option value="hls">HLS</option></select></label>
+            <label class="metadata-field-wide" for="metadata-audio-url"><span>Source URL</span><input id="metadata-audio-url" type="url" placeholder="https://media.example/audio.m4a" /></label>
+          </div>
+          <p id="metadata-audio-error" class="metadata-editor-error" role="alert" hidden></p>
+          <div class="metadata-panel-actions">
+            <button id="btn-metadata-save-audio" type="button" class="ember-inline-action ember-inline-action--primary">Add / replace</button>
+          </div>
+        </section>
+      </div>
     </div>
 
     <!-- Actions Footer -->
-    <footer class="app-footer p-4 border-t border-slate-800 bg-[#1E293B]/20 flex gap-2 flex-shrink-0">
+    <footer id="deployment-action-footer" class="app-footer p-4 border-t border-slate-800 bg-[#1E293B]/20 flex gap-2 flex-shrink-0">
       <button id="btn-deploy-server" data-state="idle" class="ember-primary flex-1 py-2.5 px-3 flex items-center justify-center gap-1.5" title="Deploy Folder to Server" disabled>
         <svg id="icon-deploy-state" class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
         </svg>
-        <span id="text-deploy-state" class="truncate">Send to StreamHome</span>
+        <span id="text-deploy-state" class="truncate">Queue ingestion</span>
       </button>
       <button id="btn-preview-stream" class="ember-secondary py-2.5 px-3 flex items-center justify-center gap-1.5" title="Preview Stream" disabled>
         <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

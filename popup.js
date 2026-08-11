@@ -22,6 +22,13 @@ let currentSkipMarkerLookupPromise = null;
 let skipMarkerRequestSequence = 0;
 let skipMarkerRefreshTimer = null;
 let manualSkipMarkers = [];
+let deploymentMode = 'ingestion';
+let metadataLoadSequence = 0;
+let metadataEditorMarkers = createEmptySkipMarkers();
+let metadataSubtitles = [];
+let metadataAudioTracks = [];
+let metadataClearMarkersArmed = false;
+let metadataClearMarkersTimer = null;
 
 const DEPLOYMENT_DRAFT_PREFIX = 'deploymentDraft:';
 const SKIP_MARKER_TYPES = ['intro', 'recap', 'credits', 'preview'];
@@ -155,6 +162,16 @@ let btnTvBack, tvShowTitle, tvShowMeta, tvSeasonsContainer, tvEpisodesContainer;
 let btnPlayerBack, playerPageTitle, playerPageMeta, displayStreamUrl;
 let playerMetaTmdb, playerMetaType;
 let btnDeployServer, btnDownloadStream, btnPreviewStream, iconDeployState, textDeployState;
+let btnModeIngestion, btnModeMetadata, ingestionWorkspace, metadataWorkspace, deploymentActionFooter;
+let metadataTargetPanel, metadataTargetId, metadataTargetStatus, btnMetadataRefresh;
+let metadataMarkersPanel, metadataMarkersStatus, metadataMarkersList;
+let metadataMarkerType, metadataMarkerStart, metadataMarkerEnd, metadataMarkerError;
+let btnMetadataAddMarker, btnMetadataReplaceMarkers, btnMetadataClearMarkers;
+let metadataSubtitlesPanel, metadataSubtitlesStatus, metadataSubtitlesList;
+let metadataSubtitleCaptured, metadataSubtitleTrackId, metadataSubtitleLanguage;
+let metadataSubtitleLabel, metadataSubtitleUrl, metadataSubtitleError, btnMetadataSaveSubtitle;
+let metadataAudioPanel, metadataAudioStatus, metadataAudioList, metadataAudioCaptured;
+let metadataAudioLanguage, metadataAudioSourceType, metadataAudioUrl, metadataAudioError, btnMetadataSaveAudio;
 let qualitySelector, languageSelector, audioSelector, audioSelectorWrapper, dubbingTracksList, subtitlesWrapper, subtitlesList;
 let deploySeasonInput, deployEpisodeInput, deployEpisodicInputsWrapper;
 let customVideoInput, customAudioInput;
@@ -216,6 +233,44 @@ document.addEventListener('DOMContentLoaded', () => {
   btnDownloadStream = document.getElementById('btn-download-stream');
   iconDeployState = document.getElementById('icon-deploy-state');
   textDeployState = document.getElementById('text-deploy-state');
+  btnModeIngestion = document.getElementById('btn-mode-ingestion');
+  btnModeMetadata = document.getElementById('btn-mode-metadata');
+  ingestionWorkspace = document.getElementById('ingestion-workspace');
+  metadataWorkspace = document.getElementById('metadata-workspace');
+  deploymentActionFooter = document.getElementById('deployment-action-footer');
+  metadataTargetPanel = document.getElementById('metadata-target-panel');
+  metadataTargetId = document.getElementById('metadata-target-id');
+  metadataTargetStatus = document.getElementById('metadata-target-status');
+  btnMetadataRefresh = document.getElementById('btn-metadata-refresh');
+  metadataMarkersPanel = document.getElementById('metadata-markers-panel');
+  metadataMarkersStatus = document.getElementById('metadata-markers-status');
+  metadataMarkersList = document.getElementById('metadata-markers-list');
+  metadataMarkerType = document.getElementById('metadata-marker-type');
+  metadataMarkerStart = document.getElementById('metadata-marker-start');
+  metadataMarkerEnd = document.getElementById('metadata-marker-end');
+  metadataMarkerError = document.getElementById('metadata-marker-error');
+  btnMetadataAddMarker = document.getElementById('btn-metadata-add-marker');
+  btnMetadataReplaceMarkers = document.getElementById('btn-metadata-replace-markers');
+  btnMetadataClearMarkers = document.getElementById('btn-metadata-clear-markers');
+  metadataSubtitlesPanel = document.getElementById('metadata-subtitles-panel');
+  metadataSubtitlesStatus = document.getElementById('metadata-subtitles-status');
+  metadataSubtitlesList = document.getElementById('metadata-subtitles-list');
+  metadataSubtitleCaptured = document.getElementById('metadata-subtitle-captured');
+  metadataSubtitleTrackId = document.getElementById('metadata-subtitle-track-id');
+  metadataSubtitleLanguage = document.getElementById('metadata-subtitle-language');
+  metadataSubtitleLabel = document.getElementById('metadata-subtitle-label');
+  metadataSubtitleUrl = document.getElementById('metadata-subtitle-url');
+  metadataSubtitleError = document.getElementById('metadata-subtitle-error');
+  btnMetadataSaveSubtitle = document.getElementById('btn-metadata-save-subtitle');
+  metadataAudioPanel = document.getElementById('metadata-audio-panel');
+  metadataAudioStatus = document.getElementById('metadata-audio-status');
+  metadataAudioList = document.getElementById('metadata-audio-list');
+  metadataAudioCaptured = document.getElementById('metadata-audio-captured');
+  metadataAudioLanguage = document.getElementById('metadata-audio-language');
+  metadataAudioSourceType = document.getElementById('metadata-audio-source-type');
+  metadataAudioUrl = document.getElementById('metadata-audio-url');
+  metadataAudioError = document.getElementById('metadata-audio-error');
+  btnMetadataSaveAudio = document.getElementById('btn-metadata-save-audio');
   qualitySelector = document.getElementById('quality-selector');
   audioSelector = document.getElementById('audio-selector');
   languageSelector = document.getElementById('language-selector');
@@ -260,6 +315,26 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnDownloadStream) btnDownloadStream.addEventListener('click', triggerStreamDownloads);
   if (btnPreviewStream) btnPreviewStream.addEventListener('click', onPreviewClick);
   if (btnDeployServer) btnDeployServer.addEventListener('click', deployMetadataPayload);
+  if (btnModeIngestion) btnModeIngestion.addEventListener('click', () => setDeploymentMode('ingestion'));
+  if (btnModeMetadata) btnModeMetadata.addEventListener('click', () => setDeploymentMode('metadata'));
+  [btnModeIngestion, btnModeMetadata].forEach((tab) => {
+    if (!tab) return;
+    tab.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const targetMode = event.key === 'ArrowLeft' || event.key === 'Home' ? 'ingestion' : 'metadata';
+      setDeploymentMode(targetMode);
+      (targetMode === 'metadata' ? btnModeMetadata : btnModeIngestion).focus();
+    });
+  });
+  if (btnMetadataRefresh) btnMetadataRefresh.addEventListener('click', () => loadMetadataEditor({ force: true }));
+  if (btnMetadataAddMarker) btnMetadataAddMarker.addEventListener('click', addMetadataMarker);
+  if (btnMetadataReplaceMarkers) btnMetadataReplaceMarkers.addEventListener('click', replaceMetadataMarkers);
+  if (btnMetadataClearMarkers) btnMetadataClearMarkers.addEventListener('click', clearMetadataMarkers);
+  if (btnMetadataSaveSubtitle) btnMetadataSaveSubtitle.addEventListener('click', saveMetadataSubtitle);
+  if (btnMetadataSaveAudio) btnMetadataSaveAudio.addEventListener('click', saveMetadataAudio);
+  if (metadataSubtitleCaptured) metadataSubtitleCaptured.addEventListener('change', applyCapturedSubtitleToMetadataForm);
+  if (metadataAudioCaptured) metadataAudioCaptured.addEventListener('change', applyCapturedAudioToMetadataForm);
   if (btnRetrySkipMarkers) btnRetrySkipMarkers.addEventListener('click', () => fetchSkipMarkersForDeployment({ force: true }));
   if (btnAddManualSkipMarker) btnAddManualSkipMarker.addEventListener('click', addManualSkipMarker);
   if (manualSkipMarkerEnd) {
@@ -276,6 +351,14 @@ document.addEventListener('DOMContentLoaded', () => {
       clearManualSkipMarkerError();
       persistDeploymentDraft();
     });
+  });
+  [
+    metadataMarkerType, metadataMarkerStart, metadataMarkerEnd,
+    metadataSubtitleTrackId, metadataSubtitleLanguage, metadataSubtitleLabel, metadataSubtitleUrl,
+    metadataAudioLanguage, metadataAudioSourceType, metadataAudioUrl
+  ].forEach((control) => {
+    if (!control) return;
+    control.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', persistDeploymentDraft);
   });
   if (btnAddCustomSub) btnAddCustomSub.addEventListener('click', addCustomSubtitleTrack);
   if (qualitySelector) qualitySelector.addEventListener('change', (e) => onQualityChange(e.target.value));
@@ -497,7 +580,7 @@ function collectDeploymentDraft() {
   const quality = getCurrentVideoQuality();
 
   return {
-    version: 4,
+    version: 5,
     kind: 'task',
     contextKey: activeDeploymentKey,
     taskId: currentTaskId ?? currentTaskContext.id,
@@ -505,6 +588,7 @@ function collectDeploymentDraft() {
     selectedStreamUrl: selectedStreamUrl || '',
     selectedAudioUrl: selectedAudio || '',
     selectedAudioTrackId: selectedAudioTrackId || '',
+    deploymentMode,
     selectedQuality: quality,
     language: languageSelector ? languageSelector.value : 'en',
     customVideo: customVideoInput ? customVideoInput.value : '',
@@ -519,6 +603,17 @@ function collectDeploymentDraft() {
     pendingManualSkipMarkerType: manualSkipMarkerType ? manualSkipMarkerType.value : 'intro',
     pendingManualSkipMarkerStart: manualSkipMarkerStart ? manualSkipMarkerStart.value : '',
     pendingManualSkipMarkerEnd: manualSkipMarkerEnd ? manualSkipMarkerEnd.value : '',
+    metadataEditorMarkers,
+    metadataMarkerType: metadataMarkerType ? metadataMarkerType.value : 'intro',
+    metadataMarkerStart: metadataMarkerStart ? metadataMarkerStart.value : '',
+    metadataMarkerEnd: metadataMarkerEnd ? metadataMarkerEnd.value : '',
+    metadataSubtitleTrackId: metadataSubtitleTrackId ? metadataSubtitleTrackId.value : '',
+    metadataSubtitleLanguage: metadataSubtitleLanguage ? metadataSubtitleLanguage.value : '',
+    metadataSubtitleLabel: metadataSubtitleLabel ? metadataSubtitleLabel.value : '',
+    metadataSubtitleUrl: metadataSubtitleUrl ? metadataSubtitleUrl.value : '',
+    metadataAudioLanguage: metadataAudioLanguage ? metadataAudioLanguage.value : '',
+    metadataAudioSourceType: metadataAudioSourceType ? metadataAudioSourceType.value : 'auto',
+    metadataAudioUrl: metadataAudioUrl ? metadataAudioUrl.value : '',
     updatedAt: Date.now()
   };
 }
@@ -563,8 +658,12 @@ function addSelectOptionIfMissing(select, value) {
 }
 
 function applyDeploymentDraft(draft) {
-  if (!draft) return;
+  if (!draft) {
+    setDeploymentMode('ingestion', { load: false, persist: false });
+    return;
+  }
   isRestoringDeploymentDraft = true;
+  const restoredMode = draft.deploymentMode === 'metadata' ? 'metadata' : 'ingestion';
 
   try {
     if (draft.currentStreamItem) currentStreamItem = draft.currentStreamItem;
@@ -600,6 +699,18 @@ function applyDeploymentDraft(draft) {
     }
     if (manualSkipMarkerStart) manualSkipMarkerStart.value = draft.pendingManualSkipMarkerStart || '';
     if (manualSkipMarkerEnd) manualSkipMarkerEnd.value = draft.pendingManualSkipMarkerEnd || '';
+    metadataEditorMarkers = normalizeServerSkipMarkers(draft.metadataEditorMarkers);
+    renderMetadataMarkers();
+    if (metadataMarkerType) metadataMarkerType.value = SKIP_MARKER_TYPES.includes(draft.metadataMarkerType) ? draft.metadataMarkerType : 'intro';
+    if (metadataMarkerStart) metadataMarkerStart.value = draft.metadataMarkerStart || '';
+    if (metadataMarkerEnd) metadataMarkerEnd.value = draft.metadataMarkerEnd || '';
+    if (metadataSubtitleTrackId) metadataSubtitleTrackId.value = draft.metadataSubtitleTrackId || '';
+    if (metadataSubtitleLanguage) metadataSubtitleLanguage.value = draft.metadataSubtitleLanguage || '';
+    if (metadataSubtitleLabel) metadataSubtitleLabel.value = draft.metadataSubtitleLabel || '';
+    if (metadataSubtitleUrl) metadataSubtitleUrl.value = draft.metadataSubtitleUrl || '';
+    if (metadataAudioLanguage) metadataAudioLanguage.value = draft.metadataAudioLanguage || '';
+    if (metadataAudioSourceType) metadataAudioSourceType.value = draft.metadataAudioSourceType === 'hls' ? 'hls' : 'auto';
+    if (metadataAudioUrl) metadataAudioUrl.value = draft.metadataAudioUrl || '';
 
     const subtitlesByUrl = new Map();
     [...(availableSubtitles || []), ...(draft.availableSubtitles || [])].forEach((subtitle) => {
@@ -621,6 +732,7 @@ function applyDeploymentDraft(draft) {
   } finally {
     isRestoringDeploymentDraft = false;
   }
+  setDeploymentMode(restoredMode, { load: restoredMode === 'metadata', persist: false });
 }
 
 function restorePlayerDeployView(state) {
@@ -679,7 +791,7 @@ async function verifyAndConnect() {
   const tmdbVal = inputTmdbApiKey.value.trim();
 
   if (!serverVal) { displayError('Please specify a valid backend server URL.'); return; }
-  if (!apiVal) { displayError('Authenticating credentials/API key cannot be empty.'); return; }
+  if (!apiVal) { displayError('A StreamHome integration key with ingest permission is required.'); return; }
   if (!tmdbVal) { displayError('TMDB API Key (v3) cannot be empty.'); return; }
 
   savedServerUrl = serverVal;
@@ -1592,6 +1704,7 @@ function refreshDeploymentWorkspace(task, patterns = {}, learningTasks = scanned
     : (!previousAudio || selectedAudioUrl === previousAudio);
   if ((previousAudioTrackId || previousAudio) && !audioSelectionRetained) stateChanged = true;
   populateSubtitles({ preserveSelection: true });
+  populateMetadataCapturedSources();
   renderGroupedStreams(renderTask, patterns, learningTasks);
   updateDeploymentCaptureButton(currentTaskId == activeTaskId);
   updateSourceDependentActions();
@@ -1623,6 +1736,16 @@ function openPlayerDeployPage(task, selectedItem = null, rawUrls = [], audioItem
   availableSubtitles = subtitles;
   availableVideos = video;
   currentTaskContext = task;
+  metadataEditorMarkers = createEmptySkipMarkers();
+  metadataSubtitles = [];
+  metadataAudioTracks = [];
+  renderMetadataMarkers();
+  renderMetadataSubtitles();
+  renderMetadataAudio();
+  clearMetadataFormError(metadataMarkerError);
+  clearMetadataFormError(metadataSubtitleError);
+  clearMetadataFormError(metadataAudioError);
+  setDeploymentMode('ingestion', { load: false, persist: false });
 
   currentStreamItem = selectedItem;
   selectedStreamUrl = selectedItem ? (selectedItem.videoUrl || selectedItem.audioUrl || '') : '';
@@ -2311,7 +2434,7 @@ function resetDeployButtonState() {
   iconDeployState.innerHTML = `
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
   `;
-  textDeployState.textContent = 'Send to StreamHome';
+  textDeployState.textContent = 'Queue ingestion';
   updateSourceDependentActions();
 }
 
@@ -2380,6 +2503,605 @@ function getSourceTypeForUrl(url, explicitSourceType = '') {
   return lowerUrl.includes('.m3u8') || lowerUrl.includes('mpegurl') || lowerUrl.includes('/hls/')
     ? 'hls'
     : 'auto';
+}
+
+function getCurrentMediaIdentity() {
+  if (!currentTaskContext) return null;
+  const tmdbId = Number.parseInt(currentTaskContext.id, 10);
+  if (!Number.isInteger(tmdbId) || tmdbId <= 0) return null;
+  if (currentTaskContext.type !== 'series') {
+    return { mediaId: `m_${tmdbId}`, tmdbId, mediaType: 'movie', season: null, episode: null };
+  }
+  const season = Number.parseInt(deploySeasonInput ? deploySeasonInput.value : currentTaskContext.season, 10);
+  const episode = Number.parseInt(deployEpisodeInput ? deployEpisodeInput.value : currentTaskContext.episode, 10);
+  if (!Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 1) return null;
+  return {
+    mediaId: `ep_${tmdbId}_s${season}_e${episode}`,
+    tmdbId,
+    mediaType: 'tv',
+    season,
+    episode
+  };
+}
+
+function createMediaSenderOperationId(operation, mediaId = 'ingest') {
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${operation}:${mediaId}:${Date.now()}:${suffix}`;
+}
+
+function sendMediaSenderRequest(request) {
+  const operationId = request.operationId || createMediaSenderOperationId(request.operation, request.mediaId);
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({
+      action: 'media_sender_request',
+      request: { ...request, operationId }
+    }, (response) => {
+      const runtimeError = chrome.runtime.lastError;
+      if (runtimeError) {
+        resolve({
+          ok: false,
+          status: 0,
+          code: 'extension_channel_closed',
+          message: 'The extension could not keep the MediaSender response channel open.',
+          operationId
+        });
+        return;
+      }
+      resolve(response || {
+        ok: false,
+        status: 0,
+        code: 'empty_extension_response',
+        message: 'The extension received no MediaSender response.',
+        operationId
+      });
+    });
+  });
+}
+
+function findPendingMediaSenderOperation(mediaId) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['mediaSenderOperations'], (result) => {
+      const operations = result.mediaSenderOperations && typeof result.mediaSenderOperations === 'object'
+        ? Object.values(result.mediaSenderOperations)
+        : [];
+      resolve(operations
+        .filter((operation) => operation && operation.mediaId === mediaId && operation.status === 'pending')
+        .sort((left, right) => Number(right.startedAt || 0) - Number(left.startedAt || 0))[0] || null);
+    });
+  });
+}
+
+function describeMediaSenderError(result) {
+  if (!result) return 'StreamHome returned no operation result.';
+  if (result.code === 'media_not_ready' || result.status === 409) {
+    return result.message || 'This media must finish ingestion before playback metadata can be changed.';
+  }
+  if (result.status === 413) return result.message || 'The sidecar exceeds the StreamHome size limit.';
+  if (result.status === 422) return result.message || 'StreamHome rejected the metadata contract or downloaded media.';
+  if (result.status === 403) return result.message || 'The integration key requires the ingest permission.';
+  if (result.status === 401) return result.message || 'The integration key is missing, invalid, expired, or revoked.';
+  return result.message || translateHttpStatus(result.status);
+}
+
+function setMetadataPanelState(panel, statusElement, state, message) {
+  if (panel) {
+    panel.dataset.state = state;
+    panel.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+    panel.querySelectorAll('button').forEach((button) => {
+      button.disabled = state === 'loading';
+    });
+  }
+  if (statusElement && message) statusElement.textContent = message;
+}
+
+function setDeploymentMode(mode, options = {}) {
+  const nextMode = mode === 'metadata' ? 'metadata' : 'ingestion';
+  const shouldLoad = options.load !== false;
+  const shouldPersist = options.persist !== false;
+  deploymentMode = nextMode;
+
+  if (btnModeIngestion) btnModeIngestion.setAttribute('aria-selected', nextMode === 'ingestion' ? 'true' : 'false');
+  if (btnModeMetadata) btnModeMetadata.setAttribute('aria-selected', nextMode === 'metadata' ? 'true' : 'false');
+  if (btnModeIngestion) btnModeIngestion.tabIndex = nextMode === 'ingestion' ? 0 : -1;
+  if (btnModeMetadata) btnModeMetadata.tabIndex = nextMode === 'metadata' ? 0 : -1;
+  if (ingestionWorkspace) ingestionWorkspace.classList.toggle('hidden', nextMode !== 'ingestion');
+  if (metadataWorkspace) metadataWorkspace.classList.toggle('hidden', nextMode !== 'metadata');
+  if (deploymentActionFooter) deploymentActionFooter.classList.toggle('hidden', nextMode !== 'ingestion');
+  if (btnDeploymentSniff) btnDeploymentSniff.hidden = nextMode !== 'ingestion';
+
+  if (nextMode === 'metadata') {
+    populateMetadataCapturedSources();
+    const identity = getCurrentMediaIdentity();
+    if (metadataTargetId) metadataTargetId.textContent = identity ? identity.mediaId : 'Invalid media identity';
+    if (shouldLoad) loadMetadataEditor({ force: true });
+  }
+  if (shouldPersist) persistDeploymentDraft();
+}
+
+function normalizeServerSkipMarkers(markers) {
+  const normalized = createEmptySkipMarkers();
+  SKIP_MARKER_TYPES.forEach((type) => {
+    const ranges = Array.isArray(markers && markers[type]) ? markers[type] : [];
+    normalized[type] = ranges.map((range) => {
+      const start = Number.isFinite(Number(range && range.start))
+        ? Number(range.start)
+        : Number(range && range.start_ms) / 1000;
+      const end = Number.isFinite(Number(range && range.end))
+        ? Number(range.end)
+        : Number(range && range.end_ms) / 1000;
+      return { start, end };
+    }).filter((range) => Number.isFinite(range.start)
+      && range.start >= 0
+      && Number.isFinite(range.end)
+      && range.end > range.start)
+      .sort((left, right) => left.start - right.start);
+  });
+  return normalized;
+}
+
+function normalizeServerSubtitle(track) {
+  if (!track || typeof track !== 'object') return null;
+  const trackId = String(track.trackId || track.track_id || '').trim();
+  if (!trackId) return null;
+  return {
+    trackId,
+    language: String(track.language || 'und').trim().toLowerCase(),
+    label: String(track.label || track.language || trackId).trim(),
+    url: String(track.url || '').trim(),
+    fileName: String(track.fileName || track.file_name || '').trim()
+  };
+}
+
+function normalizeServerAudioTrack(track) {
+  if (typeof track === 'string') {
+    return { language: track.toLowerCase(), label: getSubtitleLanguageName(track), url: '', sourceType: 'auto', fileName: '' };
+  }
+  if (!track || typeof track !== 'object') return null;
+  const language = String(track.language || '').trim().toLowerCase();
+  if (!language) return null;
+  return {
+    language,
+    label: String(track.label || getSubtitleLanguageName(language)).trim(),
+    url: String(track.url || '').trim(),
+    sourceType: track.source_type === 'hls' || track.sourceType === 'hls' ? 'hls' : 'auto',
+    fileName: String(track.fileName || track.file_name || '').trim()
+  };
+}
+
+function normalizeMetadataResponse(data) {
+  const root = data && typeof data.metadata === 'object' ? data.metadata : (data || {});
+  const subtitleSource = Array.isArray(root.subtitles) ? root.subtitles : [];
+  let audioSource = [];
+  if (Array.isArray(root.externalAudio)) audioSource = root.externalAudio;
+  else if (Array.isArray(root.external_audio)) audioSource = root.external_audio;
+  else if (Array.isArray(root.audio)) audioSource = root.audio;
+  else if (root.audio && typeof root.audio === 'object') audioSource = [root.audio];
+  return {
+    skipMarkers: normalizeServerSkipMarkers(root.skipMarkers || root.skip_markers),
+    subtitles: subtitleSource.map(normalizeServerSubtitle).filter(Boolean),
+    audio: audioSource.map(normalizeServerAudioTrack).filter(Boolean)
+  };
+}
+
+function appendMetadataEmptyState(container, message) {
+  if (!container) return;
+  const empty = document.createElement('p');
+  empty.className = 'metadata-track-empty';
+  empty.textContent = message;
+  container.appendChild(empty);
+}
+
+function createMetadataAction(label, className, handler, ariaLabel = '') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = className;
+  button.textContent = label;
+  if (ariaLabel) button.setAttribute('aria-label', ariaLabel);
+  button.addEventListener('click', handler);
+  return button;
+}
+
+function createMetadataTrackRow(primaryText, secondaryText, actions = []) {
+  const row = document.createElement('div');
+  row.className = 'metadata-track-row';
+  const details = document.createElement('div');
+  details.className = 'metadata-track-details';
+  const primary = document.createElement('span');
+  primary.className = 'metadata-track-primary';
+  primary.textContent = primaryText;
+  const secondary = document.createElement('span');
+  secondary.className = 'metadata-track-secondary';
+  secondary.textContent = secondaryText;
+  details.append(primary, secondary);
+  const controls = document.createElement('div');
+  controls.className = 'metadata-track-actions';
+  actions.forEach((action) => controls.appendChild(action));
+  row.append(details, controls);
+  return row;
+}
+
+function renderMetadataMarkers() {
+  if (!metadataMarkersList) return;
+  metadataMarkersList.replaceChildren();
+  let count = 0;
+  SKIP_MARKER_TYPES.forEach((type) => {
+    (metadataEditorMarkers[type] || []).forEach((range, index) => {
+      count += 1;
+      const rangeLabel = `${formatSkipMarkerTime(range.start)} - ${formatSkipMarkerTime(range.end)}`;
+      const remove = createMetadataAction(
+        'Remove',
+        'ember-inline-action ember-inline-action--danger',
+        () => {
+          metadataEditorMarkers[type].splice(index, 1);
+          renderMetadataMarkers();
+          setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'idle', 'Unsaved marker changes. Replace all to publish them.');
+          persistDeploymentDraft();
+        },
+        `Remove ${type} marker ${rangeLabel}`
+      );
+      metadataMarkersList.appendChild(createMetadataTrackRow(type.toUpperCase(), rangeLabel, [remove]));
+    });
+  });
+  if (count === 0) appendMetadataEmptyState(metadataMarkersList, 'No skip markers in the editor.');
+}
+
+function renderMetadataSubtitles() {
+  if (!metadataSubtitlesList) return;
+  metadataSubtitlesList.replaceChildren();
+  if (metadataSubtitles.length === 0) {
+    appendMetadataEmptyState(metadataSubtitlesList, 'No application-owned subtitle tracks reported.');
+    return;
+  }
+  metadataSubtitles.forEach((track) => {
+    const edit = createMetadataAction('Edit', 'ember-inline-action', () => {
+      clearMetadataFormError(metadataSubtitleError);
+      metadataSubtitleTrackId.value = track.trackId;
+      metadataSubtitleLanguage.value = track.language;
+      metadataSubtitleLabel.value = track.label;
+      metadataSubtitleUrl.value = track.url || '';
+      if (!track.url) showMetadataFormError(metadataSubtitleError, 'The server does not expose the original source URL. Enter a new HTTP(S) URL to replace this track.');
+      persistDeploymentDraft();
+    }, `Edit subtitle ${track.trackId}`);
+    const remove = createMetadataAction('Delete', 'ember-inline-action ember-inline-action--danger', () => deleteMetadataSubtitle(track), `Delete subtitle ${track.trackId}`);
+    const secondary = `${track.language.toUpperCase()} · ${track.label}${track.fileName ? ` · ${track.fileName}` : ''}`;
+    metadataSubtitlesList.appendChild(createMetadataTrackRow(track.trackId, secondary, [edit, remove]));
+  });
+}
+
+function renderMetadataAudio() {
+  if (!metadataAudioList) return;
+  metadataAudioList.replaceChildren();
+  if (metadataAudioTracks.length === 0) {
+    appendMetadataEmptyState(metadataAudioList, 'No application-owned external dubbing reported.');
+    return;
+  }
+  metadataAudioTracks.forEach((track) => {
+    const edit = createMetadataAction('Edit', 'ember-inline-action', () => {
+      clearMetadataFormError(metadataAudioError);
+      metadataAudioLanguage.value = track.language;
+      metadataAudioSourceType.value = track.sourceType || 'auto';
+      metadataAudioUrl.value = track.url || '';
+      if (!track.url) showMetadataFormError(metadataAudioError, 'The server does not expose the original source URL. Enter a new HTTP(S) URL to replace this dubbing track.');
+      persistDeploymentDraft();
+    }, `Edit ${track.language} dubbing`);
+    const remove = createMetadataAction('Delete', 'ember-inline-action ember-inline-action--danger', () => deleteMetadataAudio(track), `Delete ${track.language} dubbing`);
+    const secondary = `${track.label} · ${track.sourceType === 'hls' ? 'HLS' : 'External'}${track.fileName ? ` · ${track.fileName}` : ''}`;
+    metadataAudioList.appendChild(createMetadataTrackRow(track.language.toUpperCase(), secondary, [edit, remove]));
+  });
+}
+
+function populateMetadataCapturedSources() {
+  if (metadataSubtitleCaptured) {
+    const previous = metadataSubtitleCaptured.value;
+    metadataSubtitleCaptured.innerHTML = '<option value="">Choose a detected subtitle</option>';
+    (availableSubtitles || []).filter((track) => track && track.url && track.isBroken !== true).forEach((track) => {
+      const option = document.createElement('option');
+      option.value = track.url;
+      option.textContent = `${getSubtitleLanguageName(track.language || track.lang)} - ${track.label || 'Subtitle'}`;
+      metadataSubtitleCaptured.appendChild(option);
+    });
+    if (Array.from(metadataSubtitleCaptured.options).some((option) => option.value === previous)) metadataSubtitleCaptured.value = previous;
+  }
+  if (metadataAudioCaptured) {
+    const previous = metadataAudioCaptured.value;
+    metadataAudioCaptured.innerHTML = '<option value="">Choose a detected dubbing track</option>';
+    (availableAudios || []).filter((track) => track && track.deployable && track.audioUrl).forEach((track) => {
+      const option = document.createElement('option');
+      option.value = track.id;
+      option.textContent = `${getSubtitleLanguageName(track.language)} - ${track.label}`;
+      metadataAudioCaptured.appendChild(option);
+    });
+    if (Array.from(metadataAudioCaptured.options).some((option) => option.value === previous)) metadataAudioCaptured.value = previous;
+  }
+}
+
+function createStableSubtitleTrackId(language, label) {
+  const baseLanguage = String(language || 'und').toLowerCase().split('-')[0].replace(/[^a-z0-9]/g, '') || 'und';
+  const labelSuffix = /\bcc\b/i.test(label) ? 'cc' : 'main';
+  const base = `${baseLanguage}-${labelSuffix}`;
+  if (!metadataSubtitles.some((track) => track.trackId === base)) return base;
+  let suffix = 2;
+  while (metadataSubtitles.some((track) => track.trackId === `${base}-${suffix}`)) suffix += 1;
+  return `${base}-${suffix}`;
+}
+
+function applyCapturedSubtitleToMetadataForm() {
+  const selected = (availableSubtitles || []).find((track) => track.url === metadataSubtitleCaptured.value);
+  if (!selected) return;
+  const language = String(selected.language || selected.lang || 'und').toLowerCase();
+  const label = selected.label || getSubtitleLanguageName(language);
+  metadataSubtitleLanguage.value = language;
+  metadataSubtitleLabel.value = label;
+  metadataSubtitleUrl.value = selected.url;
+  metadataSubtitleTrackId.value = createStableSubtitleTrackId(language, label);
+  clearMetadataFormError(metadataSubtitleError);
+  persistDeploymentDraft();
+}
+
+function applyCapturedAudioToMetadataForm() {
+  const selected = (availableAudios || []).find((track) => track.id === metadataAudioCaptured.value);
+  if (!selected) return;
+  metadataAudioLanguage.value = selected.language === 'unknown' ? '' : selected.language;
+  metadataAudioSourceType.value = selected.sourceType === 'hls' ? 'hls' : 'auto';
+  metadataAudioUrl.value = selected.audioUrl || '';
+  clearMetadataFormError(metadataAudioError);
+  persistDeploymentDraft();
+}
+
+function clearMetadataFormError(element) {
+  if (!element) return;
+  element.textContent = '';
+  element.hidden = true;
+}
+
+function showMetadataFormError(element, message) {
+  if (!element) {
+    displayError(message);
+    return;
+  }
+  element.textContent = message;
+  element.hidden = false;
+}
+
+async function loadMetadataEditor() {
+  const identity = getCurrentMediaIdentity();
+  const requestSequence = ++metadataLoadSequence;
+  if (metadataTargetId) metadataTargetId.textContent = identity ? identity.mediaId : 'Invalid media identity';
+  if (!identity) {
+    setMetadataPanelState(metadataTargetPanel, metadataTargetStatus, 'error', 'A valid movie or episode identity is required.');
+    return;
+  }
+
+  const pendingOperation = await findPendingMediaSenderOperation(identity.mediaId);
+  if (requestSequence !== metadataLoadSequence || deploymentMode !== 'metadata') return;
+  const loadingMessage = pendingOperation
+    ? `Waiting for ${String(pendingOperation.operation || 'metadata operation').replace(/_/g, ' ')} to finish...`
+    : 'Loading StreamHome-owned playback metadata...';
+  setMetadataPanelState(metadataTargetPanel, metadataTargetStatus, 'loading', loadingMessage);
+  const result = await sendMediaSenderRequest({ operation: 'get_metadata', mediaId: identity.mediaId });
+  if (requestSequence !== metadataLoadSequence || deploymentMode !== 'metadata') return;
+  if (!result.ok) {
+    const message = result.status === 404
+      ? 'Metadata read endpoint is unavailable or this media was not found.'
+      : describeMediaSenderError(result);
+    setMetadataPanelState(metadataTargetPanel, metadataTargetStatus, 'error', message);
+    return;
+  }
+
+  const metadata = normalizeMetadataResponse(result.data);
+  metadataEditorMarkers = metadata.skipMarkers;
+  metadataSubtitles = metadata.subtitles;
+  metadataAudioTracks = metadata.audio;
+  renderMetadataMarkers();
+  renderMetadataSubtitles();
+  renderMetadataAudio();
+  setMetadataPanelState(metadataTargetPanel, metadataTargetStatus, 'success', 'Playback metadata loaded from StreamHome.');
+  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'idle', `${countSkipMarkers(metadataEditorMarkers)} marker ranges loaded.`);
+  setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'idle', `${metadataSubtitles.length} application-owned subtitle tracks loaded.`);
+  setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'idle', `${metadataAudioTracks.length} external dubbing tracks loaded.`);
+  persistDeploymentDraft();
+}
+
+function addMetadataMarker() {
+  clearMetadataFormError(metadataMarkerError);
+  const type = metadataMarkerType ? metadataMarkerType.value : '';
+  const startMs = parseSkipMarkerClock(metadataMarkerStart ? metadataMarkerStart.value : '');
+  const endMs = parseSkipMarkerClock(metadataMarkerEnd ? metadataMarkerEnd.value : '');
+  if (!SKIP_MARKER_TYPES.includes(type) || startMs === null || endMs === null) {
+    showMetadataFormError(metadataMarkerError, 'Choose a marker and enter both times as HH:MM:SS.');
+    return;
+  }
+  if (endMs <= startMs) {
+    showMetadataFormError(metadataMarkerError, 'End time must be later than start time.');
+    return;
+  }
+  if (countSkipMarkers(metadataEditorMarkers) >= 128) {
+    showMetadataFormError(metadataMarkerError, 'StreamHome accepts at most 128 marker ranges.');
+    return;
+  }
+  const range = { start: startMs / 1000, end: endMs / 1000 };
+  if (metadataEditorMarkers[type].some((existing) => existing.start === range.start && existing.end === range.end)) {
+    showMetadataFormError(metadataMarkerError, 'That marker range is already in the editor.');
+    return;
+  }
+  metadataEditorMarkers[type].push(range);
+  metadataEditorMarkers[type].sort((left, right) => left.start - right.start);
+  metadataMarkerStart.value = '';
+  metadataMarkerEnd.value = '';
+  renderMetadataMarkers();
+  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'idle', 'Unsaved marker changes. Replace all to publish them.');
+  persistDeploymentDraft();
+}
+
+async function replaceMetadataMarkers() {
+  const identity = getCurrentMediaIdentity();
+  if (!identity) return;
+  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'loading', 'Replacing the complete marker document...');
+  const result = await sendMediaSenderRequest({
+    operation: 'replace_markers',
+    mediaId: identity.mediaId,
+    body: { skip_markers: normalizeServerSkipMarkers(metadataEditorMarkers) }
+  });
+  if (!result.ok) {
+    setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'error', describeMediaSenderError(result));
+    return;
+  }
+  const responseMarkers = result.data && (result.data.skipMarkers || result.data.skip_markers);
+  if (responseMarkers) metadataEditorMarkers = normalizeServerSkipMarkers(responseMarkers);
+  renderMetadataMarkers();
+  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'success', 'All skip markers were replaced without retransmitting video.');
+  persistDeploymentDraft();
+}
+
+function resetMetadataClearConfirmation() {
+  metadataClearMarkersArmed = false;
+  if (metadataClearMarkersTimer) clearTimeout(metadataClearMarkersTimer);
+  metadataClearMarkersTimer = null;
+  if (btnMetadataClearMarkers) btnMetadataClearMarkers.textContent = 'Clear all';
+}
+
+async function clearMetadataMarkers() {
+  if (!metadataClearMarkersArmed) {
+    metadataClearMarkersArmed = true;
+    btnMetadataClearMarkers.textContent = 'Confirm clear';
+    metadataClearMarkersTimer = setTimeout(resetMetadataClearConfirmation, 4000);
+    return;
+  }
+  resetMetadataClearConfirmation();
+  const identity = getCurrentMediaIdentity();
+  if (!identity) return;
+  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'loading', 'Clearing every skip marker...');
+  const result = await sendMediaSenderRequest({ operation: 'replace_markers', mediaId: identity.mediaId, body: { skip_markers: {} } });
+  if (!result.ok) {
+    setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'error', describeMediaSenderError(result));
+    return;
+  }
+  metadataEditorMarkers = createEmptySkipMarkers();
+  renderMetadataMarkers();
+  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'success', 'Every skip marker was cleared.');
+  persistDeploymentDraft();
+}
+
+function getCapturedHeadersForUrl(url) {
+  const headers = currentTaskContext && currentTaskContext.capturedHeaders && currentTaskContext.capturedHeaders[url];
+  return headers && typeof headers === 'object' ? headers : {};
+}
+
+async function saveMetadataSubtitle() {
+  clearMetadataFormError(metadataSubtitleError);
+  const identity = getCurrentMediaIdentity();
+  if (!identity) {
+    showMetadataFormError(metadataSubtitleError, 'A valid StreamHome media identity is required.');
+    return;
+  }
+  const trackId = String(metadataSubtitleTrackId.value || '').trim();
+  const language = String(metadataSubtitleLanguage.value || '').trim().replace(/_/g, '-').toLowerCase();
+  const label = String(metadataSubtitleLabel.value || '').trim();
+  let url;
+  try {
+    url = requireHttpSourceUrl(metadataSubtitleUrl.value, 'Subtitle source');
+  } catch (error) {
+    showMetadataFormError(metadataSubtitleError, error.message);
+    return;
+  }
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(trackId)) {
+    showMetadataFormError(metadataSubtitleError, 'Track ID must contain 1-64 letters, numbers, underscores, or hyphens.');
+    return;
+  }
+  if (!/^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/.test(language) || !label) {
+    showMetadataFormError(metadataSubtitleError, 'Enter a valid language tag and label.');
+    return;
+  }
+  setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'loading', `Saving subtitle ${trackId}...`);
+  const result = await sendMediaSenderRequest({
+    operation: 'put_subtitle',
+    mediaId: identity.mediaId,
+    trackId,
+    body: { language, label, url, headers: getCapturedHeadersForUrl(url) }
+  });
+  if (!result.ok) {
+    setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'error', describeMediaSenderError(result));
+    return;
+  }
+  const returnedTracks = result.data && Array.isArray(result.data.subtitles) ? result.data.subtitles.map(normalizeServerSubtitle).filter(Boolean) : null;
+  if (returnedTracks) metadataSubtitles = returnedTracks;
+  else {
+    const returned = normalizeServerSubtitle(result.data && result.data.subtitle) || { trackId, language, label, url, fileName: '' };
+    returned.url = returned.url || url;
+    metadataSubtitles = metadataSubtitles.filter((track) => track.trackId !== trackId);
+    metadataSubtitles.push(returned);
+  }
+  renderMetadataSubtitles();
+  setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'success', `Subtitle ${trackId} was added or replaced.`);
+}
+
+async function deleteMetadataSubtitle(track) {
+  const identity = getCurrentMediaIdentity();
+  if (!identity) return;
+  setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'loading', `Deleting subtitle ${track.trackId}...`);
+  const result = await sendMediaSenderRequest({ operation: 'delete_subtitle', mediaId: identity.mediaId, trackId: track.trackId });
+  if (!result.ok) {
+    setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'error', describeMediaSenderError(result));
+    return;
+  }
+  metadataSubtitles = metadataSubtitles.filter((item) => item.trackId !== track.trackId);
+  renderMetadataSubtitles();
+  setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'success', `Subtitle ${track.trackId} was deleted.`);
+}
+
+async function saveMetadataAudio() {
+  clearMetadataFormError(metadataAudioError);
+  const identity = getCurrentMediaIdentity();
+  if (!identity) {
+    showMetadataFormError(metadataAudioError, 'A valid StreamHome media identity is required.');
+    return;
+  }
+  const language = String(metadataAudioLanguage.value || '').trim().replace(/_/g, '-').toLowerCase();
+  let url;
+  try {
+    url = requireHttpSourceUrl(metadataAudioUrl.value, 'Dubbing source');
+  } catch (error) {
+    showMetadataFormError(metadataAudioError, error.message);
+    return;
+  }
+  if (!/^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/.test(language)) {
+    showMetadataFormError(metadataAudioError, 'Enter a valid dubbing language tag.');
+    return;
+  }
+  const sourceType = metadataAudioSourceType.value === 'hls' ? 'hls' : 'auto';
+  setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'loading', `Saving ${language} dubbing...`);
+  const result = await sendMediaSenderRequest({
+    operation: 'put_audio',
+    mediaId: identity.mediaId,
+    language,
+    body: { url, source_type: sourceType, headers: getCapturedHeadersForUrl(url) }
+  });
+  if (!result.ok) {
+    setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'error', describeMediaSenderError(result));
+    return;
+  }
+  const returned = normalizeServerAudioTrack(result.data && result.data.audio)
+    || { language, label: getSubtitleLanguageName(language), url, sourceType, fileName: '' };
+  returned.url = returned.url || url;
+  returned.sourceType = sourceType;
+  metadataAudioTracks = metadataAudioTracks.filter((track) => track.language !== returned.language);
+  metadataAudioTracks.push(returned);
+  renderMetadataAudio();
+  setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'success', `${language.toUpperCase()} dubbing was added or replaced.`);
+}
+
+async function deleteMetadataAudio(track) {
+  const identity = getCurrentMediaIdentity();
+  if (!identity) return;
+  setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'loading', `Deleting ${track.language} dubbing...`);
+  const result = await sendMediaSenderRequest({ operation: 'delete_audio', mediaId: identity.mediaId, language: track.language });
+  if (!result.ok) {
+    setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'error', describeMediaSenderError(result));
+    return;
+  }
+  metadataAudioTracks = metadataAudioTracks.filter((item) => item.language !== track.language);
+  renderMetadataAudio();
+  setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'success', `${track.language.toUpperCase()} dubbing was deleted.`);
 }
 
 async function deployMetadataPayload() {
@@ -2480,37 +3202,21 @@ async function deployMetadataPayload() {
     : convertManualSkipMarkersForPayload();
   textDeployState.textContent = 'Connecting...';
 
-  const requestUrl = `${savedServerUrl}/api/add-movie`;
-
-  fetch(requestUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${savedApiKey}`
-    }, // [16]
-    body: JSON.stringify(payload)
-  })
-  .then(async (response) => {
-    if (!response.ok) {
-      displayError(translateHttpStatus(response.status));
-      resetDeployButtonState();
-      return;
-    }
-
-    btnDeployServer.dataset.state = 'success';
-    textDeployState.textContent = 'Queued in StreamHome';
-    iconDeployState.innerHTML = `
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
-    `;
-
-    setTimeout(resetDeployButtonState, 1600);
-  })
-  .catch((err) => {
+  const result = await sendMediaSenderRequest({ operation: 'ingest', body: payload });
+  if (!result.ok) {
     resetDeployButtonState();
     btnDeployServer.classList.add('animate-shake');
     setTimeout(() => { btnDeployServer.classList.remove('animate-shake'); }, 4500);
-    displayError(err.message || 'Server Connection Timed Out.');
-  });
+    displayError(describeMediaSenderError(result));
+    return;
+  }
+
+  btnDeployServer.dataset.state = 'success';
+  textDeployState.textContent = 'Queued in StreamHome';
+  iconDeployState.innerHTML = `
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+  `;
+  setTimeout(resetDeployButtonState, 1600);
 }
 
 let currentTvTask = null;
@@ -3015,7 +3721,7 @@ function getSkipMarkerLookupContext() {
   if (isSeries) {
     season = Number.parseInt(deploySeasonInput ? deploySeasonInput.value : '', 10);
     episode = Number.parseInt(deployEpisodeInput ? deployEpisodeInput.value : '', 10);
-    if (!Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 0) return null;
+    if (!Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 1) return null;
   }
 
   return {
