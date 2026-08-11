@@ -40,6 +40,9 @@ Last verified: 2026-08-11
 - Structured HLS/DASH/direct dubbing discovery with language, labels, default
   state, episode isolation, live selection retention, deployment-draft
   persistence, and `audio_url` ingestion (`42d18ba`).
+- MediaSender ingestion alignment, an allowlisted service-worker client, and an
+  Ember completed-playback editor for skip markers, subtitle sidecars, and
+  external dubbing sidecars (`64671c3`, `b8a8e91`, `1dd3532`).
 
 ### Preview surfaces
 
@@ -194,11 +197,17 @@ Last verified: 2026-08-11
   manifest-managed states rendered without horizontal overflow or console
   errors. A new German HLS track appeared during listening while the Turkish
   selection, audio URL, and language remained unchanged.
+- MediaSender checks covered JavaScript syntax, Tailwind output, duplicate IDs,
+  all DOM lookups, service-worker route/body/error/storage scenarios, and a
+  410 x 600 browser fixture. Marker, subtitle, and HLS dubbing mutations,
+  deletion, a recoverable 409 error, keyboard tabs, single-scroll layout, and
+  zero horizontal overflow or console diagnostics were verified.
 
 ## Next candidates
 
 1. Add automated regression coverage for capture and credential state machines.
 2. Resolve manifest-managed audio deployment when no standalone audio URL is
    available.
-3. Align movie ingestion fields with the server's omission preference.
+3. Add and document `GET /api/media/{media_id}/metadata` in StreamHome for the
+   extension's existing-metadata view.
 4. Continue accessibility and long-content testing at popup dimensions.

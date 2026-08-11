@@ -42,6 +42,7 @@ service-worker traffic and therefore cannot be rejected by tab ID alone.
 - versioned learned stream examples, legacy source signatures, and favorites;
 - popup view state;
 - `activeDeploymentKey` and per-context `deploymentDraft:{contextKey}` records;
+- bounded, credential-free summaries under `mediaSenderOperations`;
 - active credentials: `serverUrl`, `apiKey`, `tmdbApiKey`;
 - disconnected drafts: `draftServerUrl`, `draftApiKey`, `draftTmdbApiKey`.
 
@@ -97,6 +98,11 @@ becoming extra selector entries.
 `activeDeploymentKey` lets startup reopen the media/episode deployment after
 the popup closes. Legacy source-specific draft keys can be read during startup
 and are persisted into the new media/episode key when the workspace opens.
+
+Draft version 5 also retains the selected deployment mode, the local marker
+editor document, and pending subtitle/dubbing form values. Server-owned track
+collections are refreshed through MediaSender rather than being treated as
+authoritative draft data.
 
 ## Preview request headers
 
@@ -197,11 +203,30 @@ rules cover both selected video and audio hosts.
 
 ## Deployment boundary
 
-The popup combines TMDB metadata, selected captured sources, request headers,
-subtitles, and optional skip markers, then posts them to the configured
-StreamHome ingestion endpoint. It starts TheIntroDB lookup when the deployment
-surface opens and renders loading, ready, empty, or error state with marker
-details.
+The deployment surface has two modes. New ingestion combines TMDB identity,
+selected captured sources, replay headers, subtitles, and optional skip
+markers, then asks the service worker to post them to StreamHome. Edit playback
+uses the canonical catalog ID to load and mutate only StreamHome-owned skip
+markers, application-owned subtitle sidecars, and application-owned external
+dubbing sidecars. It never edits TMDB presentation metadata or the completed
+main video.
+
+The service worker is the MediaSender transport boundary. It maps seven named
+operations to exact methods and paths, rejects unknown fields, validates media,
+track, language, and HTTP(S) source identifiers, applies authentication and a
+five-minute timeout, and normalizes FastAPI errors. Per-media operation
+summaries are serialized in local storage so the popup can report work that
+outlives its window without persisting secrets or source data.
+
+Edit playback calls `GET /api/media/{media_id}/metadata` before presenting
+server-owned collections. The current server reference documents mutation on
+that path but not this read method, so a missing GET is an explicit
+compatibility state. Only external-audio collections are normalized as
+editable dubbing; a general `languages` result is never interpreted as
+deletable sidecar ownership.
+
+New ingestion starts TheIntroDB lookup when the deployment surface opens and
+renders loading, ready, empty, or error state with marker details.
 
 When TheIntroDB is empty or unavailable, the manual fallback accepts intro,
 recap, credits, or preview ranges in `HH:MM:SS`. Input is validated so both
@@ -211,6 +236,11 @@ milliseconds, scoped with the deployment draft, and converted through the
 existing skip-marker normalization to second-based `start` / `end` fields at
 submission. Non-empty TheIntroDB results take precedence over saved manual
 markers. Errors remain recoverable; captured tasks are retained for retry.
+
+Movie ingestion omits `season` and `episode`. TV ingestion accepts Season 0
+and requires an episode of at least 1. Every submitted video, detached audio,
+and subtitle source is an HTTP(S) URL without embedded credentials; source
+type metadata preserves HLS classification for both video and detached audio.
 
 ## Verification pattern
 

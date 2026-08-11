@@ -177,3 +177,22 @@ is managed entirely inside the manifest remain visible but disabled so users
 can see that dubbing exists without sending an invalid detached URL. Network
 failure preserves the last successful manifest metadata rather than erasing
 it.
+
+## 24. Separate ingestion from completed-playback editing
+
+Submitting a new source and changing application-owned playback sidecars are
+different operations. The deployment surface therefore has fixed New
+ingestion and Edit playback tabs. Ingestion retains live capture, source
+selection, preview, download, and queueing. Edit playback derives the canonical
+`m_...` or `ep_..._s..._e...` identity and can replace the complete skip-marker
+document or add, replace, and delete application-owned subtitle and external
+dubbing sidecars without retransmitting the main video.
+
+All MediaSender traffic crosses one service-worker allowlist so the popup
+cannot choose arbitrary methods, paths, or body fields. Safe operation status
+survives popup closure, while credentials, source URLs, headers, and response
+bodies never enter the operation log. Existing metadata must come from an
+explicit read endpoint; general playback language lists are not treated as
+deletable external tracks. Because the current StreamHome reference documents
+`PATCH` but not `GET /api/media/{media_id}/metadata`, absence of that read route
+is shown as a compatibility error instead of being hidden or guessed.

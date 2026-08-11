@@ -1,6 +1,6 @@
 # External API Documentation
 
-Last verified: 2026-07-22
+Last verified: 2026-08-11
 
 ## TMDB
 
@@ -34,13 +34,24 @@ Returned millisecond values are normalized for StreamHome ingestion as seconds:
 
 Missing data is non-fatal; deployment continues without skip markers.
 
-## StreamHome ingestion
+## StreamHome MediaSender
 
-The saved server URL is normalized and used as the base for:
+The saved server URL is normalized and MediaSender requests are sent by the
+background service worker with `Authorization: Bearer {integrationKey}`.
 
-`POST {serverUrl}/api/add-movie`
+- `POST /api/add-movie`: queue movie or TV ingestion;
+- `GET /api/media/{media_id}/metadata`: extension compatibility endpoint for
+  loading editable playback metadata;
+- `PATCH /api/media/{media_id}/metadata`: replace all skip markers;
+- `PUT` / `DELETE /api/media/{media_id}/subtitles/{track_id}`: add, replace, or
+  remove one application-owned subtitle sidecar;
+- `PUT` / `DELETE /api/media/{media_id}/audio/{language}`: add, replace, or
+  remove one application-owned external dubbing sidecar.
 
-Authentication is sent as `Authorization: Bearer {accessToken}`. The extension submits one selected video URL, an optional audio URL, replay headers for the selected captured video, metadata, selected subtitle tracks, and skip-marker arrays. See `mediaSenderAPI.md` for the current wire shape and compatibility note.
+The current StreamHome reference documents the mutations but not the GET read
+route. Servers without that compatibility endpoint produce a visible editor
+read error. See `mediaSenderAPI.md` for the exact extension operation map,
+payload rules, ownership boundary, and persisted operation-state policy.
 
 ## Browser-side credentials
 

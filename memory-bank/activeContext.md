@@ -4,9 +4,23 @@ Last verified: 2026-08-11
 
 ## Current state
 
-The StreamHome Chrome extension is operational. Manifest-declared dubbing
-tracks are now visible and selectable in the live deployment workspace. The
-latest completed work is:
+The StreamHome Chrome extension is operational. The deployment workspace now
+separates new ingestion from completed-playback metadata editing. The latest
+completed work is:
+
+- `1dd3532`: added fixed New ingestion and Edit playback tabs, an Ember
+  metadata editor for skip markers, subtitle sidecars, and external dubbing
+  sidecars, persisted mode/form drafts, server-owned collection loading,
+  two-click marker clearing, captured-source prefills, and explicit operation
+  error states at the 410 x 600 popup size.
+- `b8a8e91`: added the service-worker MediaSender allowlist for ingestion,
+  metadata reads, marker replacement, subtitle mutations, and dubbing
+  mutations, with strict route/body validation, normalized FastAPI errors, a
+  five-minute timeout, and safe persistent operation summaries.
+- `64671c3`: aligned ingestion with the current MediaSender contract: movie
+  payloads omit season/episode, TV accepts Season 0 and requires episode 1 or
+  later, sources must be credential-free HTTP(S) URLs, and detected HLS video
+  and audio retain their source types.
 
 - `42d18ba`: parsed HLS and DASH audio declarations into structured,
   episode-scoped tracks; rendered accessible dubbing choices beside subtitles;
@@ -106,6 +120,16 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
   captures without navigation. Preview and download remain disabled until a
   detected source is selected, and deployment also accepts the explicit video
   override.
+- The deployment surface has keyboard-operable New ingestion and Edit playback
+  tabs. Edit playback derives `m_<tmdb>` or
+  `ep_<tmdb>_s<season>_e<episode>`, hides listening and ingestion actions, and
+  loads server-owned playback metadata. It can replace the complete marker
+  document, add/replace/delete application-owned subtitle sidecars, and
+  add/replace/delete application-owned external dubbing sidecars without
+  retransmitting the main video. General playback language lists are never
+  treated as deletable sidecars. The current server reference does not define
+  the required GET read route, so unsupported servers receive an explicit
+  compatibility error.
 - Series streams are stored per episode so navigating between episodes does not leak streams across episode boundaries.
 - Preview playback supports HLS.js, dash.js, and direct media. When a selected
   dubbing URL belongs to the HLS master, the player matches it by URL with
@@ -279,6 +303,18 @@ showed Original, Turkish HLS, English direct, and disabled Japanese embedded
 rows without horizontal overflow or console errors. Starting listening added
 a new German HLS row live while preserving the selected Turkish track, its
 hidden audio URL, and the deployment language.
+The MediaSender update passed syntax checks for `background.js` and `popup.js`,
+Tailwind regeneration, duplicate-ID and HTML/JavaScript lookup checks, direct
+service-worker route/body/error/storage scenarios, and `git diff --check`. The
+background harness covered all allowlisted methods, Season 0 identity,
+rejection of episode 0, unsafe identities, unknown operations and body fields,
+FastAPI 422 parsing, authentication headers, and the absence of secrets/source
+data from operation summaries. A 410 x 600 browser fixture covered metadata
+loading, marker add/replace/two-click clear, captured subtitle collision IDs,
+HLS dubbing prefill, successful PUT/DELETE flows, a 409 error with controls
+restored, tab keyboard navigation, hidden ingestion controls in edit mode, one
+vertical scroll region, no horizontal overflow, and no console errors or
+warnings.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
@@ -291,6 +327,8 @@ and pushed memory-bank update.
 - Add automated tests for credential lifecycle, task/tab capture gates, and series episode isolation.
 - Resolve deployment semantics for manifest-managed audio tracks that do not
   expose a standalone audio URL.
-- Align movie ingestion payloads with the server preference to omit `season` and `episode`; the current extension sends them as `null`.
+- Add and document `GET /api/media/{media_id}/metadata` in StreamHome so the
+  extension can list existing application-owned playback metadata before a
+  mutation.
 
 This memory bank records verified project context, but the implementation and current Git history remain the source of truth when they disagree.
