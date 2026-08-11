@@ -106,11 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
     bypassTargets.push({ url: audioUrl, headers: audioBypassHeaders });
   }
 
-  chrome.runtime.sendMessage({
-    action: 'set_bypass_rules',
-    targets: bypassTargets
-  });
-
   function normalizedUrl(value) {
     try {
       return new URL(value, streamUrl).href;
@@ -167,8 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
     specState.className = 'font-bold text-rose-500 mt-0.5 block';
   });
 
-  // Initialize playback
-  if (format === 'hls') {
+  function initializePlayback() {
+    if (format === 'hls') {
     if (typeof Hls !== 'undefined' && Hls.isSupported()) {
       log('Initializing HLS.js engine...', 'info');
       engineBadge.textContent = 'HLS.js Engine';
@@ -207,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       log('HLS is not supported in this browser.', 'error');
     }
-  } else if (format === 'dash') {
+    } else if (format === 'dash') {
     if (typeof dashjs !== 'undefined') {
       log('Initializing Dash.js engine...', 'info');
       engineBadge.textContent = 'Dash.js Engine';
@@ -217,11 +212,24 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       log('Dash.js library is not loaded. Unable to play DASH stream.', 'error');
     }
-  } else {
-    log('Initializing HTML5 Direct MP4 playback...', 'info');
-    engineBadge.textContent = 'HTML5 Native';
-    video.src = streamUrl;
+    } else {
+      log('Initializing HTML5 Direct MP4 playback...', 'info');
+      engineBadge.textContent = 'HTML5 Native';
+      video.src = streamUrl;
+    }
   }
+
+  chrome.runtime.sendMessage({
+    action: 'set_bypass_rules',
+    targets: bypassTargets
+  }, (response) => {
+    if (chrome.runtime.lastError || !response || response.ok !== true) {
+      log('Header bypass could not be confirmed; starting playback without it.', 'warning');
+    } else {
+      log(`Header bypass ready (${response.ruleCount} rule${response.ruleCount === 1 ? '' : 's'}).`, 'success');
+    }
+    initializePlayback();
+  });
 
   // Cleanup on tab closing
   window.addEventListener('beforeunload', () => {

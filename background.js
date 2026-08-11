@@ -1035,7 +1035,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const targets = Array.isArray(message.targets)
       ? message.targets.filter((target) => target && target.url)
       : (message.targetUrl ? [{ url: message.targetUrl, headers: message.headers || {} }] : []);
-    if (targets.length === 0) return;
+    if (targets.length === 0) {
+      sendResponse({ ok: false, reason: 'no-targets' });
+      return false;
+    }
 
     const ruleIds = [ruleId, ruleId + 1000000];
 
@@ -1068,13 +1071,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }, () => {
         if (chrome.runtime.lastError) {
           console.error(`[DEBUG] DNR Session Rules Registration Failed for Rule ${ruleId}:`, chrome.runtime.lastError);
+          sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
         } else {
           console.log(`[DEBUG] Successfully registered ${addRules.length} DNR preview bypass rule(s).`);
+          sendResponse({ ok: true, ruleCount: addRules.length });
         }
       });
     } catch (e) {
       console.error("[DEBUG] Failed to setup DNR rules due to URL parsing error:", e);
+      sendResponse({ ok: false, reason: 'invalid-target-url' });
     }
+    return true;
   } else if (message.action === 'clear_bypass_rules') {
     chrome.declarativeNetRequest.updateSessionRules({
       removeRuleIds: [ruleId, ruleId + 1000000]
