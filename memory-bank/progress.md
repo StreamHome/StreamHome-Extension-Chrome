@@ -1,6 +1,6 @@
 # Progress
 
-Last verified: 2026-08-11
+Last verified: 2026-08-13
 
 ## Completed
 
@@ -202,6 +202,11 @@ Last verified: 2026-08-11
   410 x 600 browser fixture. Marker, subtitle, and HLS dubbing mutations,
   deletion, a recoverable 409 error, keyboard tabs, single-scroll layout, and
   zero horizontal overflow or console diagnostics were verified.
+- Preview transport checks confirmed captured Cookie and Authorization headers
+  reach DNR rules without entering the player URL, rules are limited to the
+  created tab and both video/audio hosts, navigation waits for installation,
+  and tab closure removes the rules. All three changed scripts passed syntax
+  checks and `git diff --check`.
 
 ## Next candidates
 

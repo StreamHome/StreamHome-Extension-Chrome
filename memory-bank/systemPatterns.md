@@ -106,12 +106,15 @@ authoritative draft data.
 
 ## Preview request headers
 
-Some sources require captured headers such as Referer or Origin. Player and
-reader tabs install a dynamic session rule scoped to their tab and remove it
-when finished. Rule IDs derive from tab IDs to avoid one preview replacing
-another. Preview media engines start only after the background worker
-acknowledges the asynchronous rule update; otherwise the first manifest request
-can race ahead of the required headers.
+Some sources require captured Referer, Origin, User-Agent, Cookie, or
+Authorization headers. The popup sends the selected video/audio targets and
+their captured headers to the service worker without putting header values in
+a URL. The worker creates a blank preview tab, installs host rules conditioned
+on that exact tab ID, and only then navigates it to `player.html`. This ordering
+prevents the first manifest request from racing ahead of its credentials. The
+player removes its rules on unload, and the service worker also removes them
+when Chrome reports the tab closed. Reader rules retain their existing scoped
+setup and cleanup path.
 
 ## UI system
 

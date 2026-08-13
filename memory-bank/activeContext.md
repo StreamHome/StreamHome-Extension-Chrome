@@ -1,6 +1,6 @@
 # Active Context
 
-Last verified: 2026-08-11
+Last verified: 2026-08-13
 
 ## Current state
 
@@ -8,6 +8,10 @@ The StreamHome Chrome extension is operational. The deployment workspace now
 separates new ingestion from completed-playback metadata editing. The latest
 completed work is:
 
+- `26f2cb1`: moved preview opening into the service worker so captured
+  Referer, Origin, User-Agent, Cookie, and Authorization headers are installed
+  before player navigation, scoped to the created tab, kept out of the player
+  URL, and removed when that tab closes.
 - `1fee842`: made preview wait for the asynchronous DNR header-rule update
   before HLS.js, DASH, or direct playback starts, eliminating the manifest
   request race that produced immediate `manifestLoadError` failures.
@@ -321,6 +325,11 @@ warnings.
 The preview ordering fix passed `node --check` for `background.js` and
 `player.js` plus `git diff --check`; the background message now acknowledges
 rule installation before the player initializes its media engine.
+The completed preview transport passed syntax checks for `background.js`,
+`popup.js`, and `player.js`, `git diff --check`, and a mocked open-tab/DNR
+harness. The harness verified Cookie and Authorization installation, exact tab
+scope, two-host video/audio rules, navigation only after rule completion, and
+that credential/header values do not enter the player URL.
 The repository does not yet have an automated test suite.
 
 Repository work is governed by the root `AGENTS.md`. Agents must receive clear
