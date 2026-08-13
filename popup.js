@@ -2444,31 +2444,32 @@ function onPreviewClick() {
   
   const headers = (currentTaskContext.capturedHeaders && targetUrl) ? currentTaskContext.capturedHeaders[targetUrl] : {};
   
-  const params = new URLSearchParams();
-  params.set('url', targetUrl);
-  params.set('title', currentTaskContext.title || '');
-  if (headers.referer) params.set('referer', headers.referer);
-  if (headers.origin) params.set('origin', headers.origin);
-  if (headers['user-agent']) params.set('useragent', headers['user-agent']);
+  const preview = {
+    streamUrl: targetUrl,
+    title: currentTaskContext.title || '',
+    targets: [{ url: targetUrl, headers }]
+  };
   
   const selectedAudio = audioSelector ? audioSelector.value : '';
   if (selectedAudio) {
-    params.set('audioUrl', selectedAudio);
+    preview.audioUrl = selectedAudio;
     const selectedTrack = availableAudios.find((track) => track.id === selectedAudioTrackId)
       || availableAudios.find((track) => track.audioUrl === selectedAudio);
     if (selectedTrack) {
-      params.set('audioTrackId', selectedTrack.id);
-      params.set('audioLanguage', selectedTrack.language || 'unknown');
-      params.set('audioLabel', selectedTrack.label || 'Dubbing track');
-      params.set('audioSourceType', selectedTrack.sourceType || 'direct');
+      preview.audioTrackId = selectedTrack.id;
+      preview.audioLanguage = selectedTrack.language || 'unknown';
+      preview.audioLabel = selectedTrack.label || 'Dubbing track';
+      preview.audioSourceType = selectedTrack.sourceType || 'direct';
     }
     const audioHeaders = (currentTaskContext.capturedHeaders && selectedAudio) ? currentTaskContext.capturedHeaders[selectedAudio] : {};
-    if (audioHeaders.referer) params.set('audioReferer', audioHeaders.referer);
-    if (audioHeaders.origin) params.set('audioOrigin', audioHeaders.origin);
-    if (audioHeaders['user-agent']) params.set('audioUseragent', audioHeaders['user-agent']);
+    preview.targets.push({ url: selectedAudio, headers: audioHeaders });
   }
-  
-  chrome.tabs.create({ url: `player.html?${params.toString()}` });
+
+  chrome.runtime.sendMessage({ action: 'open_preview', preview }, (response) => {
+    if (chrome.runtime.lastError || !response || response.ok !== true) {
+      displayError('Preview could not install the required source headers.');
+    }
+  });
 }
 
 function triggerStreamDownloads() {

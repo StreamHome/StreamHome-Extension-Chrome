@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const audioUrl = params.get('audioUrl') || '';
   const audioLanguage = (params.get('audioLanguage') || 'unknown').toLowerCase();
   const audioLabel = params.get('audioLabel') || 'Dubbing track';
+  const headersReady = params.get('headersReady') === '1';
   
   const referer = params.get('referer');
   const origin = params.get('origin');
@@ -64,9 +65,9 @@ document.addEventListener('DOMContentLoaded', () => {
   overlayTitle.textContent = title;
   rawStreamUrl.textContent = streamUrl;
   
-  headerReferer.textContent = referer || 'None';
-  headerOrigin.textContent = origin || 'None';
-  headerUserAgent.textContent = useragent || navigator.userAgent;
+  headerReferer.textContent = headersReady ? 'Applied securely' : (referer || 'None');
+  headerOrigin.textContent = headersReady ? 'Applied securely' : (origin || 'None');
+  headerUserAgent.textContent = headersReady ? 'Applied securely' : (useragent || navigator.userAgent);
 
   // Detect format
   let format = 'mp4';
@@ -164,54 +165,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function initializePlayback() {
     if (format === 'hls') {
-    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      log('Initializing HLS.js engine...', 'info');
-      engineBadge.textContent = 'HLS.js Engine';
-      const hls = new Hls();
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
-        selectHlsDubbingTrack(hls);
-      });
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (audioUrl) selectHlsDubbingTrack(hls);
-        log('HLS Manifest successfully parsed. Starting playback...', 'success');
-      });
-      hls.on(Hls.Events.ERROR, function (event, data) {
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              log(`HLS Network Error: ${data.details}. Retrying...`, 'warning');
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              log(`HLS Media Error: ${data.details}. Recovering...`, 'warning');
-              hls.recoverMediaError();
-              break;
-            default:
-              log(`HLS Fatal Error: ${data.details}. Playback terminated.`, 'error');
-              hls.destroy();
-              break;
+      if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+        log('Initializing HLS.js engine...', 'info');
+        engineBadge.textContent = 'HLS.js Engine';
+        const hls = new Hls();
+        hls.loadSource(streamUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+          selectHlsDubbingTrack(hls);
+        });
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (audioUrl) selectHlsDubbingTrack(hls);
+          log('HLS Manifest successfully parsed. Starting playback...', 'success');
+        });
+        hls.on(Hls.Events.ERROR, function (event, data) {
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                log(`HLS Network Error: ${data.details}. Retrying...`, 'warning');
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                log(`HLS Media Error: ${data.details}. Recovering...`, 'warning');
+                hls.recoverMediaError();
+                break;
+              default:
+                log(`HLS Fatal Error: ${data.details}. Playback terminated.`, 'error');
+                hls.destroy();
+                break;
+            }
           }
-        }
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      log('Initializing Native HLS playback...', 'info');
-      engineBadge.textContent = 'Safari Native';
-      video.src = streamUrl;
-    } else {
-      log('HLS is not supported in this browser.', 'error');
-    }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        log('Initializing Native HLS playback...', 'info');
+        engineBadge.textContent = 'Safari Native';
+        video.src = streamUrl;
+      } else {
+        log('HLS is not supported in this browser.', 'error');
+      }
     } else if (format === 'dash') {
-    if (typeof dashjs !== 'undefined') {
-      log('Initializing Dash.js engine...', 'info');
-      engineBadge.textContent = 'Dash.js Engine';
-      const player = dashjs.MediaPlayer().create();
-      player.initialize(video, streamUrl, true);
-      log('DASH media player initialized.', 'success');
-    } else {
-      log('Dash.js library is not loaded. Unable to play DASH stream.', 'error');
-    }
+      if (typeof dashjs !== 'undefined') {
+        log('Initializing Dash.js engine...', 'info');
+        engineBadge.textContent = 'Dash.js Engine';
+        const player = dashjs.MediaPlayer().create();
+        player.initialize(video, streamUrl, true);
+        log('DASH media player initialized.', 'success');
+      } else {
+        log('Dash.js library is not loaded. Unable to play DASH stream.', 'error');
+      }
     } else {
       log('Initializing HTML5 Direct MP4 playback...', 'info');
       engineBadge.textContent = 'HTML5 Native';
@@ -219,17 +220,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  chrome.runtime.sendMessage({
-    action: 'set_bypass_rules',
-    targets: bypassTargets
-  }, (response) => {
-    if (chrome.runtime.lastError || !response || response.ok !== true) {
-      log('Header bypass could not be confirmed; starting playback without it.', 'warning');
-    } else {
-      log(`Header bypass ready (${response.ruleCount} rule${response.ruleCount === 1 ? '' : 's'}).`, 'success');
-    }
+  if (headersReady) {
+    log('Header bypass ready before player initialization.', 'success');
     initializePlayback();
-  });
+  } else {
+    chrome.runtime.sendMessage({ action: 'set_bypass_rules', targets: bypassTargets }, (response) => {
+      if (chrome.runtime.lastError || !response || response.ok !== true) {
+        log('Header bypass could not be confirmed; starting playback without it.', 'warning');
+      } else {
+        log(`Header bypass ready (${response.ruleCount} rule${response.ruleCount === 1 ? '' : 's'}).`, 'success');
+      }
+      initializePlayback();
+    });
+  }
 
   // Cleanup on tab closing
   window.addEventListener('beforeunload', () => {

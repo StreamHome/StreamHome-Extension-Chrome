@@ -1000,6 +1000,59 @@ function processAndStoreStream(url, type = 'video', requestHeaders = null, sourc
 // =========================================================================
 // DECLARATIVE NET REQUEST DYNAMIC BYPASS RULES
 // =========================================================================
+function getPreviewRuleIds(tabId) {
+  return [tabId, tabId + 1000000];
+}
+
+function installPreviewRules(tabId, targets, callback) {
+  const ruleIds = getPreviewRuleIds(tabId);
+  try {
+    const uniqueHosts = new Map();
+    targets.forEach((target) => {
+      const parsedUrl = new URL(target.url);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Unsupported preview URL');
+      const existing = uniqueHosts.get(parsedUrl.host) || {};
+      const incoming = target.headers && typeof target.headers === 'object' ? target.headers : {};
+      uniqueHosts.set(parsedUrl.host, { ...incoming, ...existing });
+    });
+
+    const addRules = Array.from(uniqueHosts.entries()).slice(0, ruleIds.length).flatMap(([host, headers], index) => {
+      const requestHeaders = [];
+      ['referer', 'origin', 'user-agent', 'cookie', 'authorization'].forEach((header) => {
+        if (typeof headers[header] === 'string' && headers[header]) {
+          requestHeaders.push({ header, operation: 'set', value: headers[header] });
+        }
+      });
+      if (requestHeaders.length === 0) return [];
+      return [{
+        id: ruleIds[index],
+        priority: 1,
+        action: { type: 'modifyHeaders', requestHeaders },
+        condition: {
+          urlFilter: `*://${host}/*`,
+          resourceTypes: ['xmlhttprequest', 'media'],
+          tabIds: [tabId]
+        }
+      }];
+    });
+
+    chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: ruleIds, addRules }, () => {
+      if (chrome.runtime.lastError) {
+        callback({ ok: false, reason: chrome.runtime.lastError.message });
+        return;
+      }
+      callback({ ok: true, ruleCount: addRules.length });
+    });
+  } catch (_) {
+    callback({ ok: false, reason: 'invalid-target-url' });
+  }
+}
+
+function clearPreviewRules(tabId) {
+  if (!Number.isInteger(tabId) || tabId <= 0) return;
+  chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: getPreviewRuleIds(tabId) });
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Determine rule ID dynamically from tab ID to avoid collisions
   const ruleId = (sender.tab && sender.tab.id) ? sender.tab.id : 1001;
@@ -1031,6 +1084,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(sendResponse)
       .catch(() => sendResponse({ ok: false, reason: 'fetch-failed' }));
     return true;
+  } else if (message.action === 'open_preview') {
+    const preview = message.preview && typeof message.preview === 'object' ? message.preview : {};
+    const targets = Array.isArray(preview.targets) ? preview.targets.filter((target) => target && target.url).slice(0, 2) : [];
+    const hasStreamTarget = targets.some((target) => target.url === preview.streamUrl);
+    const hasAudioTarget = !preview.audioUrl || targets.some((target) => target.url === preview.audioUrl);
+    if (!preview.streamUrl || targets.length === 0 || !hasStreamTarget || !hasAudioTarget) {
+      sendResponse({ ok: false, reason: 'invalid-preview' });
+      return false;
+    }
+
+    chrome.tabs.create({ url: 'about:blank', active: true }, (tab) => {
+      if (chrome.runtime.lastError || !tab || !Number.isInteger(tab.id)) {
+        sendResponse({ ok: false, reason: chrome.runtime.lastError ? chrome.runtime.lastError.message : 'tab-create-failed' });
+        return;
+      }
+      installPreviewRules(tab.id, targets, (ruleResult) => {
+        if (!ruleResult.ok) {
+          chrome.tabs.remove(tab.id);
+          sendResponse(ruleResult);
+          return;
+        }
+        const params = new URLSearchParams();
+        params.set('url', preview.streamUrl);
+        params.set('title', String(preview.title || 'Stream Preview'));
+        params.set('headersReady', '1');
+        if (preview.audioUrl) params.set('audioUrl', preview.audioUrl);
+        if (preview.audioTrackId) params.set('audioTrackId', preview.audioTrackId);
+        if (preview.audioLanguage) params.set('audioLanguage', preview.audioLanguage);
+        if (preview.audioLabel) params.set('audioLabel', preview.audioLabel);
+        if (preview.audioSourceType) params.set('audioSourceType', preview.audioSourceType);
+        chrome.tabs.update(tab.id, { url: chrome.runtime.getURL(`player.html?${params.toString()}`) }, () => {
+          if (chrome.runtime.lastError) {
+            clearPreviewRules(tab.id);
+            chrome.tabs.remove(tab.id);
+            sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
+            return;
+          }
+          sendResponse({ ok: true, tabId: tab.id, ruleCount: ruleResult.ruleCount });
+        });
+      });
+    });
+    return true;
   } else if (message.action === 'set_bypass_rules') {
     const targets = Array.isArray(message.targets)
       ? message.targets.filter((target) => target && target.url)
@@ -1040,54 +1135,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
     }
 
-    const ruleIds = [ruleId, ruleId + 1000000];
-
-    try {
-      const uniqueHosts = new Map();
-      targets.forEach((target) => {
-        const host = new URL(target.url).host;
-        if (!uniqueHosts.has(host)) uniqueHosts.set(host, target.headers || {});
-      });
-      const addRules = Array.from(uniqueHosts.entries()).slice(0, ruleIds.length).flatMap(([host, headers], index) => {
-        const requestHeaders = [];
-        if (headers.referer) requestHeaders.push({ header: 'referer', operation: 'set', value: headers.referer });
-        if (headers.origin) requestHeaders.push({ header: 'origin', operation: 'set', value: headers.origin });
-        if (headers['user-agent']) requestHeaders.push({ header: 'user-agent', operation: 'set', value: headers['user-agent'] });
-        if (requestHeaders.length === 0) return [];
-        return [{
-          id: ruleIds[index],
-          priority: 1,
-          action: { type: 'modifyHeaders', requestHeaders },
-          condition: {
-            urlFilter: `*://${host}/*`,
-            resourceTypes: ['xmlhttprequest', 'media']
-          }
-        }];
-      });
-
-      chrome.declarativeNetRequest.updateSessionRules({
-        removeRuleIds: ruleIds,
-        addRules
-      }, () => {
-        if (chrome.runtime.lastError) {
-          console.error(`[DEBUG] DNR Session Rules Registration Failed for Rule ${ruleId}:`, chrome.runtime.lastError);
-          sendResponse({ ok: false, reason: chrome.runtime.lastError.message });
-        } else {
-          console.log(`[DEBUG] Successfully registered ${addRules.length} DNR preview bypass rule(s).`);
-          sendResponse({ ok: true, ruleCount: addRules.length });
-        }
-      });
-    } catch (e) {
-      console.error("[DEBUG] Failed to setup DNR rules due to URL parsing error:", e);
-      sendResponse({ ok: false, reason: 'invalid-target-url' });
-    }
+    installPreviewRules(ruleId, targets, sendResponse);
     return true;
   } else if (message.action === 'clear_bypass_rules') {
-    chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [ruleId, ruleId + 1000000]
-    }, () => {
-      console.log(`[DEBUG] Cleared active DNR Referer bypass rules (Rule ${ruleId}).`);
-    });
+    clearPreviewRules(ruleId);
   } else if (message.action === 'update_stream_quality') {
     const { url, resolution } = message;
     if (!url || !resolution) return;
@@ -1129,3 +1180,5 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
   }
 });
+
+chrome.tabs.onRemoved.addListener((tabId) => clearPreviewRules(tabId));
