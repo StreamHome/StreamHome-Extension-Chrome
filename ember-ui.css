@@ -986,6 +986,13 @@ body.ember-popup {
   display: none;
 }
 
+.metadata-workspace[hidden],
+.metadata-editor-sections[hidden],
+.metadata-blocked-state[hidden],
+.metadata-editor-form[hidden] {
+  display: none !important;
+}
+
 .metadata-target-panel,
 .metadata-editor-panel {
   display: grid;
@@ -1049,10 +1056,28 @@ body.ember-popup {
 
 .metadata-target-identity {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 4px;
   padding: 9px 10px;
   border: 1px solid rgba(255, 95, 31, 0.15);
   background: rgba(39, 24, 19, 0.58);
+}
+
+.metadata-target-identity > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.metadata-target-identity strong {
+  color: var(--ember-peach-soft);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.metadata-target-code {
+  justify-items: end;
 }
 
 .metadata-target-identity code {
@@ -1065,6 +1090,152 @@ body.ember-popup {
 .metadata-target-identity span {
   color: var(--ember-dim);
   font-size: 8px;
+}
+
+.metadata-status-badge,
+.metadata-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  border: 1px solid var(--ember-border);
+  border-radius: 2px;
+  padding: 2px 6px;
+  color: var(--ember-muted);
+  background: rgba(39, 24, 19, 0.72);
+  font-family: var(--ember-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.metadata-status-badge[data-state="ready"],
+.metadata-status-badge[data-state="success"] {
+  border-color: rgba(90, 207, 142, 0.5);
+  color: var(--ember-success);
+}
+
+.metadata-status-badge[data-state="loading"] {
+  border-color: rgba(255, 126, 78, 0.48);
+  color: var(--ember-peach);
+}
+
+.metadata-status-badge[data-state="error"],
+.metadata-status-badge[data-state="not-ready"] {
+  border-color: rgba(244, 103, 103, 0.5);
+  color: var(--ember-error);
+}
+
+.metadata-blocked-state {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px dashed rgba(255, 95, 31, 0.3);
+  border-radius: 3px;
+  background: rgba(24, 11, 7, 0.62);
+  font-family: var(--ember-mono);
+}
+
+.metadata-blocked-state strong {
+  color: var(--ember-peach-soft);
+  font-size: 10px;
+}
+
+.metadata-blocked-state span {
+  color: var(--ember-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.metadata-blocked-state[data-state="error"] {
+  border-color: rgba(244, 103, 103, 0.46);
+}
+
+.metadata-blocked-state[data-state="error"] strong,
+.metadata-blocked-state[data-state="not-ready"] strong {
+  color: var(--ember-error);
+}
+
+.metadata-editor-sections {
+  display: grid;
+  gap: 8px;
+}
+
+.metadata-editor-panel {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.metadata-section-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 9px 11px;
+  cursor: pointer;
+  list-style: none;
+  border-left: 2px solid transparent;
+}
+
+.metadata-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.metadata-section-summary:focus-visible {
+  outline: 1px solid var(--ember-orange);
+  outline-offset: -2px;
+}
+
+.metadata-editor-panel[open] > .metadata-section-summary {
+  border-left-color: var(--ember-orange);
+  background: rgba(255, 95, 31, 0.08);
+}
+
+.metadata-section-summary > span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.metadata-section-summary strong {
+  color: var(--ember-peach);
+  font-family: var(--ember-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.metadata-section-summary small {
+  color: var(--ember-muted);
+  font-family: var(--ember-mono);
+  font-size: 8px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.metadata-editor-panel[data-state="dirty"] .metadata-count-badge {
+  border-color: rgba(255, 126, 78, 0.55);
+  color: var(--ember-peach);
+}
+
+.metadata-editor-panel[data-state="success"] .metadata-count-badge {
+  border-color: rgba(90, 207, 142, 0.5);
+  color: var(--ember-success);
+}
+
+.metadata-editor-panel[data-state="error"] .metadata-count-badge {
+  border-color: rgba(244, 103, 103, 0.5);
+  color: var(--ember-error);
+}
+
+.metadata-section-body {
+  display: grid;
+  gap: 10px;
+  padding: 11px;
+  border-top: 1px solid rgba(255, 95, 31, 0.12);
 }
 
 .metadata-track-list {
@@ -1100,14 +1271,14 @@ body.ember-popup {
 
 .metadata-track-primary {
   color: var(--ember-peach-soft);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   overflow-wrap: anywhere;
 }
 
 .metadata-track-secondary {
   color: var(--ember-muted);
-  font-size: 8px;
+  font-size: 9px;
   overflow-wrap: anywhere;
 }
 
@@ -1117,6 +1288,52 @@ body.ember-popup {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.metadata-panel-actions--spread {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.metadata-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.metadata-list-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.metadata-list-actions button[hidden] {
+  display: none !important;
+}
+
+.metadata-editor-form {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid rgba(255, 126, 78, 0.26);
+  background: rgba(39, 24, 19, 0.48);
+}
+
+.metadata-form-heading {
+  display: grid;
+  gap: 3px;
+  font-family: var(--ember-mono);
+}
+
+.metadata-form-heading strong {
+  color: var(--ember-peach-soft);
+  font-size: 10px;
+}
+
+.metadata-form-heading span {
+  color: var(--ember-muted);
+  font-size: 8px;
+  line-height: 1.4;
 }
 
 .metadata-marker-fields,
@@ -1141,7 +1358,7 @@ body.ember-popup {
 .metadata-form-grid label > span {
   color: var(--ember-muted);
   font-family: var(--ember-mono);
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1154,7 +1371,8 @@ body.ember-popup {
   width: 100%;
   min-width: 0;
   font-family: var(--ember-mono);
-  font-size: 9px;
+  min-height: 31px;
+  font-size: 10px;
 }
 
 .metadata-field-wide {
@@ -1164,7 +1382,7 @@ body.ember-popup {
 .metadata-editor-error {
   margin: 0;
   color: var(--ember-error);
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.4;
 }
 
@@ -1175,6 +1393,16 @@ body.ember-popup {
 .metadata-editor-panel button[disabled] {
   cursor: not-allowed;
   opacity: 0.48;
+}
+
+.metadata-editor-panel .ember-inline-action,
+.metadata-blocked-state .ember-inline-action,
+.metadata-target-panel .ember-inline-action {
+  min-height: 30px;
+}
+
+.metadata-track-actions .ember-inline-action {
+  min-height: 28px;
 }
 
 .deployment-capture-panel {

@@ -25,10 +25,19 @@ let manualSkipMarkers = [];
 let deploymentMode = 'ingestion';
 let metadataLoadSequence = 0;
 let metadataEditorMarkers = createEmptySkipMarkers();
+let metadataBaselineMarkers = createEmptySkipMarkers();
 let metadataSubtitles = [];
 let metadataAudioTracks = [];
+let metadataLoadedMediaId = '';
+let metadataEditorReady = false;
+let metadataMutationBusy = false;
+let metadataMarkersDirty = false;
+let metadataSubtitleEditId = '';
+let metadataAudioEditLanguage = '';
 let metadataClearMarkersArmed = false;
 let metadataClearMarkersTimer = null;
+let metadataRefreshArmed = false;
+let metadataRefreshTimer = null;
 
 const DEPLOYMENT_DRAFT_PREFIX = 'deploymentDraft:';
 const SKIP_MARKER_TYPES = ['intro', 'recap', 'credits', 'preview'];
@@ -163,14 +172,18 @@ let btnPlayerBack, playerPageTitle, playerPageMeta, displayStreamUrl;
 let playerMetaTmdb, playerMetaType;
 let btnDeployServer, btnDownloadStream, btnPreviewStream, iconDeployState, textDeployState;
 let btnModeIngestion, btnModeMetadata, ingestionWorkspace, metadataWorkspace, deploymentActionFooter;
-let metadataTargetPanel, metadataTargetId, metadataTargetStatus, btnMetadataRefresh;
-let metadataMarkersPanel, metadataMarkersStatus, metadataMarkersList;
+let metadataTargetPanel, metadataTargetId, metadataTargetName, metadataTargetContext;
+let metadataTargetStatus, metadataTargetBadge, btnMetadataRefresh;
+let metadataBlockedState, metadataBlockedTitle, metadataBlockedMessage, btnMetadataBlockedRetry, metadataEditorSections;
+let metadataMarkersPanel, metadataMarkersStatus, metadataMarkersList, metadataMarkersCount;
 let metadataMarkerType, metadataMarkerStart, metadataMarkerEnd, metadataMarkerError;
-let btnMetadataAddMarker, btnMetadataReplaceMarkers, btnMetadataClearMarkers;
-let metadataSubtitlesPanel, metadataSubtitlesStatus, metadataSubtitlesList;
+let btnMetadataAddMarker, btnMetadataReplaceMarkers, btnMetadataDiscardMarkers, btnMetadataClearMarkers;
+let metadataSubtitlesPanel, metadataSubtitlesStatus, metadataSubtitlesList, metadataSubtitlesCount;
+let metadataSubtitleForm, metadataSubtitleFormTitle, btnMetadataAddSubtitle, btnMetadataCancelSubtitle;
 let metadataSubtitleCaptured, metadataSubtitleTrackId, metadataSubtitleLanguage;
 let metadataSubtitleLabel, metadataSubtitleUrl, metadataSubtitleError, btnMetadataSaveSubtitle;
-let metadataAudioPanel, metadataAudioStatus, metadataAudioList, metadataAudioCaptured;
+let metadataAudioPanel, metadataAudioStatus, metadataAudioList, metadataAudioCount;
+let metadataAudioForm, metadataAudioFormTitle, btnMetadataAddAudio, btnMetadataCancelAudio, metadataAudioCaptured;
 let metadataAudioLanguage, metadataAudioSourceType, metadataAudioUrl, metadataAudioError, btnMetadataSaveAudio;
 let qualitySelector, languageSelector, audioSelector, audioSelectorWrapper, dubbingTracksList, subtitlesWrapper, subtitlesList;
 let deploySeasonInput, deployEpisodeInput, deployEpisodicInputsWrapper;
@@ -240,21 +253,36 @@ document.addEventListener('DOMContentLoaded', () => {
   deploymentActionFooter = document.getElementById('deployment-action-footer');
   metadataTargetPanel = document.getElementById('metadata-target-panel');
   metadataTargetId = document.getElementById('metadata-target-id');
+  metadataTargetName = document.getElementById('metadata-target-name');
+  metadataTargetContext = document.getElementById('metadata-target-context');
   metadataTargetStatus = document.getElementById('metadata-target-status');
+  metadataTargetBadge = document.getElementById('metadata-target-badge');
   btnMetadataRefresh = document.getElementById('btn-metadata-refresh');
+  metadataBlockedState = document.getElementById('metadata-blocked-state');
+  metadataBlockedTitle = document.getElementById('metadata-blocked-title');
+  metadataBlockedMessage = document.getElementById('metadata-blocked-message');
+  btnMetadataBlockedRetry = document.getElementById('btn-metadata-blocked-retry');
+  metadataEditorSections = document.getElementById('metadata-editor-sections');
   metadataMarkersPanel = document.getElementById('metadata-markers-panel');
   metadataMarkersStatus = document.getElementById('metadata-markers-status');
   metadataMarkersList = document.getElementById('metadata-markers-list');
+  metadataMarkersCount = document.getElementById('metadata-markers-count');
   metadataMarkerType = document.getElementById('metadata-marker-type');
   metadataMarkerStart = document.getElementById('metadata-marker-start');
   metadataMarkerEnd = document.getElementById('metadata-marker-end');
   metadataMarkerError = document.getElementById('metadata-marker-error');
   btnMetadataAddMarker = document.getElementById('btn-metadata-add-marker');
   btnMetadataReplaceMarkers = document.getElementById('btn-metadata-replace-markers');
+  btnMetadataDiscardMarkers = document.getElementById('btn-metadata-discard-markers');
   btnMetadataClearMarkers = document.getElementById('btn-metadata-clear-markers');
   metadataSubtitlesPanel = document.getElementById('metadata-subtitles-panel');
   metadataSubtitlesStatus = document.getElementById('metadata-subtitles-status');
   metadataSubtitlesList = document.getElementById('metadata-subtitles-list');
+  metadataSubtitlesCount = document.getElementById('metadata-subtitles-count');
+  metadataSubtitleForm = document.getElementById('metadata-subtitle-form');
+  metadataSubtitleFormTitle = document.getElementById('metadata-subtitle-form-title');
+  btnMetadataAddSubtitle = document.getElementById('btn-metadata-add-subtitle');
+  btnMetadataCancelSubtitle = document.getElementById('btn-metadata-cancel-subtitle');
   metadataSubtitleCaptured = document.getElementById('metadata-subtitle-captured');
   metadataSubtitleTrackId = document.getElementById('metadata-subtitle-track-id');
   metadataSubtitleLanguage = document.getElementById('metadata-subtitle-language');
@@ -265,6 +293,11 @@ document.addEventListener('DOMContentLoaded', () => {
   metadataAudioPanel = document.getElementById('metadata-audio-panel');
   metadataAudioStatus = document.getElementById('metadata-audio-status');
   metadataAudioList = document.getElementById('metadata-audio-list');
+  metadataAudioCount = document.getElementById('metadata-audio-count');
+  metadataAudioForm = document.getElementById('metadata-audio-form');
+  metadataAudioFormTitle = document.getElementById('metadata-audio-form-title');
+  btnMetadataAddAudio = document.getElementById('btn-metadata-add-audio');
+  btnMetadataCancelAudio = document.getElementById('btn-metadata-cancel-audio');
   metadataAudioCaptured = document.getElementById('metadata-audio-captured');
   metadataAudioLanguage = document.getElementById('metadata-audio-language');
   metadataAudioSourceType = document.getElementById('metadata-audio-source-type');
@@ -327,14 +360,28 @@ document.addEventListener('DOMContentLoaded', () => {
       (targetMode === 'metadata' ? btnModeMetadata : btnModeIngestion).focus();
     });
   });
-  if (btnMetadataRefresh) btnMetadataRefresh.addEventListener('click', () => loadMetadataEditor({ force: true }));
+  if (btnMetadataRefresh) btnMetadataRefresh.addEventListener('click', () => requestMetadataRefresh());
+  if (btnMetadataBlockedRetry) btnMetadataBlockedRetry.addEventListener('click', () => loadMetadataEditor({ force: true, discardDirty: true }));
   if (btnMetadataAddMarker) btnMetadataAddMarker.addEventListener('click', addMetadataMarker);
   if (btnMetadataReplaceMarkers) btnMetadataReplaceMarkers.addEventListener('click', replaceMetadataMarkers);
+  if (btnMetadataDiscardMarkers) btnMetadataDiscardMarkers.addEventListener('click', discardMetadataMarkers);
   if (btnMetadataClearMarkers) btnMetadataClearMarkers.addEventListener('click', clearMetadataMarkers);
+  if (btnMetadataAddSubtitle) btnMetadataAddSubtitle.addEventListener('click', () => openMetadataSubtitleForm());
+  if (btnMetadataCancelSubtitle) btnMetadataCancelSubtitle.addEventListener('click', closeMetadataSubtitleForm);
   if (btnMetadataSaveSubtitle) btnMetadataSaveSubtitle.addEventListener('click', saveMetadataSubtitle);
+  if (btnMetadataAddAudio) btnMetadataAddAudio.addEventListener('click', () => openMetadataAudioForm());
+  if (btnMetadataCancelAudio) btnMetadataCancelAudio.addEventListener('click', closeMetadataAudioForm);
   if (btnMetadataSaveAudio) btnMetadataSaveAudio.addEventListener('click', saveMetadataAudio);
   if (metadataSubtitleCaptured) metadataSubtitleCaptured.addEventListener('change', applyCapturedSubtitleToMetadataForm);
   if (metadataAudioCaptured) metadataAudioCaptured.addEventListener('change', applyCapturedAudioToMetadataForm);
+  document.querySelectorAll('[data-metadata-section]').forEach((section) => {
+    section.addEventListener('toggle', () => {
+      if (!section.open) return;
+      document.querySelectorAll('[data-metadata-section]').forEach((other) => {
+        if (other !== section) other.open = false;
+      });
+    });
+  });
   if (btnRetrySkipMarkers) btnRetrySkipMarkers.addEventListener('click', () => fetchSkipMarkersForDeployment({ force: true }));
   if (btnAddManualSkipMarker) btnAddManualSkipMarker.addEventListener('click', addManualSkipMarker);
   if (manualSkipMarkerEnd) {
@@ -580,7 +627,7 @@ function collectDeploymentDraft() {
   const quality = getCurrentVideoQuality();
 
   return {
-    version: 5,
+    version: 6,
     kind: 'task',
     contextKey: activeDeploymentKey,
     taskId: currentTaskId ?? currentTaskContext.id,
@@ -604,6 +651,9 @@ function collectDeploymentDraft() {
     pendingManualSkipMarkerStart: manualSkipMarkerStart ? manualSkipMarkerStart.value : '',
     pendingManualSkipMarkerEnd: manualSkipMarkerEnd ? manualSkipMarkerEnd.value : '',
     metadataEditorMarkers,
+    metadataBaselineMarkers,
+    metadataMarkersDirty,
+    metadataLoadedMediaId,
     metadataMarkerType: metadataMarkerType ? metadataMarkerType.value : 'intro',
     metadataMarkerStart: metadataMarkerStart ? metadataMarkerStart.value : '',
     metadataMarkerEnd: metadataMarkerEnd ? metadataMarkerEnd.value : '',
@@ -611,9 +661,13 @@ function collectDeploymentDraft() {
     metadataSubtitleLanguage: metadataSubtitleLanguage ? metadataSubtitleLanguage.value : '',
     metadataSubtitleLabel: metadataSubtitleLabel ? metadataSubtitleLabel.value : '',
     metadataSubtitleUrl: metadataSubtitleUrl ? metadataSubtitleUrl.value : '',
+    metadataSubtitleFormOpen: metadataSubtitleForm ? !metadataSubtitleForm.hidden : false,
+    metadataSubtitleEditId,
     metadataAudioLanguage: metadataAudioLanguage ? metadataAudioLanguage.value : '',
     metadataAudioSourceType: metadataAudioSourceType ? metadataAudioSourceType.value : 'auto',
     metadataAudioUrl: metadataAudioUrl ? metadataAudioUrl.value : '',
+    metadataAudioFormOpen: metadataAudioForm ? !metadataAudioForm.hidden : false,
+    metadataAudioEditLanguage,
     updatedAt: Date.now()
   };
 }
@@ -700,6 +754,9 @@ function applyDeploymentDraft(draft) {
     if (manualSkipMarkerStart) manualSkipMarkerStart.value = draft.pendingManualSkipMarkerStart || '';
     if (manualSkipMarkerEnd) manualSkipMarkerEnd.value = draft.pendingManualSkipMarkerEnd || '';
     metadataEditorMarkers = normalizeServerSkipMarkers(draft.metadataEditorMarkers);
+    metadataBaselineMarkers = normalizeServerSkipMarkers(draft.metadataBaselineMarkers);
+    metadataMarkersDirty = draft.metadataMarkersDirty === true;
+    metadataLoadedMediaId = typeof draft.metadataLoadedMediaId === 'string' ? draft.metadataLoadedMediaId : '';
     renderMetadataMarkers();
     if (metadataMarkerType) metadataMarkerType.value = SKIP_MARKER_TYPES.includes(draft.metadataMarkerType) ? draft.metadataMarkerType : 'intro';
     if (metadataMarkerStart) metadataMarkerStart.value = draft.metadataMarkerStart || '';
@@ -708,9 +765,25 @@ function applyDeploymentDraft(draft) {
     if (metadataSubtitleLanguage) metadataSubtitleLanguage.value = draft.metadataSubtitleLanguage || '';
     if (metadataSubtitleLabel) metadataSubtitleLabel.value = draft.metadataSubtitleLabel || '';
     if (metadataSubtitleUrl) metadataSubtitleUrl.value = draft.metadataSubtitleUrl || '';
+    metadataSubtitleEditId = typeof draft.metadataSubtitleEditId === 'string' ? draft.metadataSubtitleEditId : '';
+    const legacySubtitleDraft = Number(draft.version || 0) < 6
+      && Boolean(draft.metadataSubtitleTrackId || draft.metadataSubtitleLanguage || draft.metadataSubtitleLabel || draft.metadataSubtitleUrl);
+    if (metadataSubtitleForm) metadataSubtitleForm.hidden = draft.metadataSubtitleFormOpen !== true && !legacySubtitleDraft;
+    if (btnMetadataAddSubtitle && metadataSubtitleForm) btnMetadataAddSubtitle.hidden = !metadataSubtitleForm.hidden;
+    if (metadataSubtitleFormTitle) metadataSubtitleFormTitle.textContent = metadataSubtitleEditId
+      ? `Replace ${metadataSubtitleEditId}`
+      : 'Add subtitle';
     if (metadataAudioLanguage) metadataAudioLanguage.value = draft.metadataAudioLanguage || '';
     if (metadataAudioSourceType) metadataAudioSourceType.value = draft.metadataAudioSourceType === 'hls' ? 'hls' : 'auto';
     if (metadataAudioUrl) metadataAudioUrl.value = draft.metadataAudioUrl || '';
+    metadataAudioEditLanguage = typeof draft.metadataAudioEditLanguage === 'string' ? draft.metadataAudioEditLanguage : '';
+    const legacyAudioDraft = Number(draft.version || 0) < 6
+      && Boolean(draft.metadataAudioLanguage || draft.metadataAudioUrl);
+    if (metadataAudioForm) metadataAudioForm.hidden = draft.metadataAudioFormOpen !== true && !legacyAudioDraft;
+    if (btnMetadataAddAudio && metadataAudioForm) btnMetadataAddAudio.hidden = !metadataAudioForm.hidden;
+    if (metadataAudioFormTitle) metadataAudioFormTitle.textContent = metadataAudioEditLanguage
+      ? `Replace ${metadataAudioEditLanguage.toUpperCase()} dubbing`
+      : 'Add dubbing';
 
     const subtitlesByUrl = new Map();
     [...(availableSubtitles || []), ...(draft.availableSubtitles || [])].forEach((subtitle) => {
@@ -1737,8 +1810,26 @@ function openPlayerDeployPage(task, selectedItem = null, rawUrls = [], audioItem
   availableVideos = video;
   currentTaskContext = task;
   metadataEditorMarkers = createEmptySkipMarkers();
+  metadataBaselineMarkers = createEmptySkipMarkers();
   metadataSubtitles = [];
   metadataAudioTracks = [];
+  metadataLoadedMediaId = '';
+  metadataEditorReady = false;
+  metadataMutationBusy = false;
+  metadataMarkersDirty = false;
+  metadataSubtitleEditId = '';
+  metadataAudioEditLanguage = '';
+  if (metadataSubtitleForm) metadataSubtitleForm.hidden = true;
+  if (metadataAudioForm) metadataAudioForm.hidden = true;
+  if (btnMetadataAddSubtitle) btnMetadataAddSubtitle.hidden = false;
+  if (btnMetadataAddAudio) btnMetadataAddAudio.hidden = false;
+  if (metadataSubtitleTrackId) metadataSubtitleTrackId.value = '';
+  if (metadataSubtitleLanguage) metadataSubtitleLanguage.value = '';
+  if (metadataSubtitleLabel) metadataSubtitleLabel.value = '';
+  if (metadataSubtitleUrl) metadataSubtitleUrl.value = '';
+  if (metadataAudioLanguage) metadataAudioLanguage.value = '';
+  if (metadataAudioSourceType) metadataAudioSourceType.value = 'auto';
+  if (metadataAudioUrl) metadataAudioUrl.value = '';
   renderMetadataMarkers();
   renderMetadataSubtitles();
   renderMetadataAudio();
@@ -2588,11 +2679,121 @@ function setMetadataPanelState(panel, statusElement, state, message) {
   if (panel) {
     panel.dataset.state = state;
     panel.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
-    panel.querySelectorAll('button').forEach((button) => {
-      button.disabled = state === 'loading';
-    });
   }
   if (statusElement && message) statusElement.textContent = message;
+  updateMetadataControlAvailability();
+}
+
+function cloneMetadataMarkers(markers) {
+  return normalizeServerSkipMarkers(JSON.parse(JSON.stringify(markers || {})));
+}
+
+function metadataMarkerFingerprint(markers) {
+  return JSON.stringify(normalizeServerSkipMarkers(markers));
+}
+
+function updateMetadataTargetSummary(identity) {
+  if (metadataTargetId) metadataTargetId.textContent = identity ? identity.mediaId : 'Invalid media identity';
+  if (metadataTargetName) metadataTargetName.textContent = currentTaskContext && currentTaskContext.title
+    ? currentTaskContext.title
+    : 'Selected media';
+  if (metadataTargetContext) {
+    metadataTargetContext.textContent = !identity
+      ? 'Invalid movie or episode identity'
+      : (identity.mediaType === 'tv'
+        ? `TV · Season ${identity.season} · Episode ${identity.episode}`
+        : 'Movie · Canonical StreamHome target');
+  }
+}
+
+function setMetadataTargetState(state, statusMessage, badgeLabel) {
+  if (metadataTargetPanel) metadataTargetPanel.dataset.state = state;
+  if (metadataTargetStatus) metadataTargetStatus.textContent = statusMessage;
+  if (metadataTargetBadge) {
+    metadataTargetBadge.dataset.state = state;
+    metadataTargetBadge.textContent = badgeLabel;
+  }
+}
+
+function showMetadataBlockedState(state, title, message, retry = true) {
+  metadataEditorReady = false;
+  if (metadataBlockedState) {
+    metadataBlockedState.hidden = false;
+    metadataBlockedState.dataset.state = state;
+  }
+  if (metadataBlockedTitle) metadataBlockedTitle.textContent = title;
+  if (metadataBlockedMessage) metadataBlockedMessage.textContent = message;
+  if (btnMetadataBlockedRetry) btnMetadataBlockedRetry.hidden = !retry;
+  if (metadataEditorSections) metadataEditorSections.hidden = true;
+  updateMetadataControlAvailability();
+}
+
+function showMetadataEditorSections() {
+  metadataEditorReady = true;
+  if (metadataBlockedState) metadataBlockedState.hidden = true;
+  if (metadataEditorSections) metadataEditorSections.hidden = false;
+  updateMetadataControlAvailability();
+}
+
+function updateMetadataCounts() {
+  if (metadataMarkersCount) metadataMarkersCount.textContent = String(countSkipMarkers(metadataEditorMarkers));
+  if (metadataSubtitlesCount) metadataSubtitlesCount.textContent = String(metadataSubtitles.length);
+  if (metadataAudioCount) metadataAudioCount.textContent = String(metadataAudioTracks.length);
+}
+
+function updateMetadataControlAvailability() {
+  const globallyDisabled = !metadataEditorReady || metadataMutationBusy;
+  if (metadataEditorSections) {
+    metadataEditorSections.querySelectorAll('input, select, button').forEach((control) => {
+      const lockedIdentifier = control === metadataSubtitleTrackId
+        ? Boolean(metadataSubtitleEditId)
+        : (control === metadataAudioLanguage ? Boolean(metadataAudioEditLanguage) : false);
+      control.disabled = globallyDisabled || lockedIdentifier;
+    });
+  }
+  if (btnMetadataReplaceMarkers) btnMetadataReplaceMarkers.disabled = globallyDisabled || !metadataMarkersDirty;
+  if (btnMetadataDiscardMarkers) btnMetadataDiscardMarkers.disabled = globallyDisabled || !metadataMarkersDirty;
+  if (btnMetadataClearMarkers) btnMetadataClearMarkers.disabled = globallyDisabled || countSkipMarkers(metadataEditorMarkers) === 0;
+  if (btnMetadataRefresh) btnMetadataRefresh.disabled = metadataMutationBusy
+    || (metadataTargetPanel && metadataTargetPanel.dataset.state === 'loading')
+    || !getCurrentMediaIdentity();
+  if (btnMetadataBlockedRetry) btnMetadataBlockedRetry.disabled = metadataMutationBusy;
+}
+
+function setMetadataMutationBusy(busy) {
+  metadataMutationBusy = busy;
+  updateMetadataControlAvailability();
+}
+
+function markMetadataMarkersDirty(message = 'Unsaved marker changes.') {
+  metadataMarkersDirty = metadataMarkerFingerprint(metadataEditorMarkers) !== metadataMarkerFingerprint(metadataBaselineMarkers);
+  setMetadataPanelState(
+    metadataMarkersPanel,
+    metadataMarkersStatus,
+    metadataMarkersDirty ? 'dirty' : 'idle',
+    metadataMarkersDirty ? message : `${countSkipMarkers(metadataEditorMarkers)} marker ranges loaded.`
+  );
+  updateMetadataCounts();
+  persistDeploymentDraft();
+}
+
+function resetMetadataRefreshConfirmation() {
+  metadataRefreshArmed = false;
+  if (metadataRefreshTimer) clearTimeout(metadataRefreshTimer);
+  metadataRefreshTimer = null;
+  if (btnMetadataRefresh) btnMetadataRefresh.textContent = 'Refresh';
+}
+
+function requestMetadataRefresh() {
+  if (metadataMarkersDirty && !metadataRefreshArmed) {
+    metadataRefreshArmed = true;
+    if (btnMetadataRefresh) btnMetadataRefresh.textContent = 'Discard & refresh';
+    if (metadataTargetStatus) metadataTargetStatus.textContent = 'Refresh again to discard unsaved marker changes.';
+    metadataRefreshTimer = setTimeout(resetMetadataRefreshConfirmation, 5000);
+    return;
+  }
+  resetMetadataRefreshConfirmation();
+  loadMetadataEditor({ force: true, discardDirty: true });
 }
 
 function setDeploymentMode(mode, options = {}) {
@@ -2607,14 +2808,18 @@ function setDeploymentMode(mode, options = {}) {
   if (btnModeMetadata) btnModeMetadata.tabIndex = nextMode === 'metadata' ? 0 : -1;
   if (ingestionWorkspace) ingestionWorkspace.classList.toggle('hidden', nextMode !== 'ingestion');
   if (metadataWorkspace) metadataWorkspace.classList.toggle('hidden', nextMode !== 'metadata');
+  if (ingestionWorkspace) ingestionWorkspace.hidden = nextMode !== 'ingestion';
+  if (metadataWorkspace) metadataWorkspace.hidden = nextMode !== 'metadata';
   if (deploymentActionFooter) deploymentActionFooter.classList.toggle('hidden', nextMode !== 'ingestion');
   if (btnDeploymentSniff) btnDeploymentSniff.hidden = nextMode !== 'ingestion';
 
   if (nextMode === 'metadata') {
     populateMetadataCapturedSources();
     const identity = getCurrentMediaIdentity();
-    if (metadataTargetId) metadataTargetId.textContent = identity ? identity.mediaId : 'Invalid media identity';
-    if (shouldLoad) loadMetadataEditor({ force: true });
+    updateMetadataTargetSummary(identity);
+    if (shouldLoad && (!metadataEditorReady || metadataLoadedMediaId !== (identity && identity.mediaId))) {
+      loadMetadataEditor({ force: false });
+    }
   }
   if (shouldPersist) persistDeploymentDraft();
 }
@@ -2678,6 +2883,8 @@ function normalizeMetadataResponse(data) {
   else if (Array.isArray(root.audio)) audioSource = root.audio;
   else if (root.audio && typeof root.audio === 'object') audioSource = [root.audio];
   return {
+    status: String(root.status || (data && data.status) || 'completed').trim().toLowerCase(),
+    mutable: root.mutable !== false && (!data || data.mutable !== false),
     skipMarkers: normalizeServerSkipMarkers(root.skipMarkers || root.skip_markers),
     subtitles: subtitleSource.map(normalizeServerSubtitle).filter(Boolean),
     audio: audioSource.map(normalizeServerAudioTrack).filter(Boolean)
@@ -2699,6 +2906,27 @@ function createMetadataAction(label, className, handler, ariaLabel = '') {
   button.textContent = label;
   if (ariaLabel) button.setAttribute('aria-label', ariaLabel);
   button.addEventListener('click', handler);
+  return button;
+}
+
+function createMetadataConfirmAction(label, handler, ariaLabel) {
+  let armed = false;
+  let timer = null;
+  const button = createMetadataAction(label, 'ember-inline-action ember-inline-action--danger', () => {
+    if (!armed) {
+      armed = true;
+      button.textContent = 'Confirm';
+      button.setAttribute('aria-label', `Confirm ${ariaLabel.toLowerCase()}`);
+      timer = setTimeout(() => {
+        armed = false;
+        button.textContent = label;
+        button.setAttribute('aria-label', ariaLabel);
+      }, 4000);
+      return;
+    }
+    if (timer) clearTimeout(timer);
+    handler();
+  }, ariaLabel);
   return button;
 }
 
@@ -2735,8 +2963,7 @@ function renderMetadataMarkers() {
         () => {
           metadataEditorMarkers[type].splice(index, 1);
           renderMetadataMarkers();
-          setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'idle', 'Unsaved marker changes. Replace all to publish them.');
-          persistDeploymentDraft();
+          markMetadataMarkersDirty('Unsaved marker removal. Save changes to publish it.');
         },
         `Remove ${type} marker ${rangeLabel}`
       );
@@ -2744,6 +2971,41 @@ function renderMetadataMarkers() {
     });
   });
   if (count === 0) appendMetadataEmptyState(metadataMarkersList, 'No skip markers in the editor.');
+  updateMetadataCounts();
+  updateMetadataControlAvailability();
+}
+
+function openMetadataSubtitleForm(track = null) {
+  metadataSubtitleEditId = track ? track.trackId : '';
+  if (metadataSubtitleForm) metadataSubtitleForm.hidden = false;
+  if (btnMetadataAddSubtitle) btnMetadataAddSubtitle.hidden = true;
+  if (metadataSubtitleFormTitle) metadataSubtitleFormTitle.textContent = track ? `Replace ${track.trackId}` : 'Add subtitle';
+  if (metadataSubtitleCaptured) metadataSubtitleCaptured.value = '';
+  if (metadataSubtitleTrackId) metadataSubtitleTrackId.value = track ? track.trackId : '';
+  if (metadataSubtitleLanguage) metadataSubtitleLanguage.value = track ? track.language : '';
+  if (metadataSubtitleLabel) metadataSubtitleLabel.value = track ? track.label : '';
+  if (metadataSubtitleUrl) metadataSubtitleUrl.value = '';
+  clearMetadataFormError(metadataSubtitleError);
+  if (track) showMetadataFormError(metadataSubtitleError, 'Replacing this track requires a new HTTP(S) source. The existing source URL is not exposed.');
+  if (metadataSubtitlesPanel) metadataSubtitlesPanel.open = true;
+  updateMetadataControlAvailability();
+  const focusTarget = track ? metadataSubtitleUrl : metadataSubtitleTrackId;
+  if (focusTarget) focusTarget.focus();
+  persistDeploymentDraft();
+}
+
+function closeMetadataSubtitleForm() {
+  metadataSubtitleEditId = '';
+  if (metadataSubtitleForm) metadataSubtitleForm.hidden = true;
+  if (btnMetadataAddSubtitle) btnMetadataAddSubtitle.hidden = false;
+  if (metadataSubtitleCaptured) metadataSubtitleCaptured.value = '';
+  if (metadataSubtitleTrackId) metadataSubtitleTrackId.value = '';
+  if (metadataSubtitleLanguage) metadataSubtitleLanguage.value = '';
+  if (metadataSubtitleLabel) metadataSubtitleLabel.value = '';
+  if (metadataSubtitleUrl) metadataSubtitleUrl.value = '';
+  clearMetadataFormError(metadataSubtitleError);
+  updateMetadataControlAvailability();
+  persistDeploymentDraft();
 }
 
 function renderMetadataSubtitles() {
@@ -2751,22 +3013,47 @@ function renderMetadataSubtitles() {
   metadataSubtitlesList.replaceChildren();
   if (metadataSubtitles.length === 0) {
     appendMetadataEmptyState(metadataSubtitlesList, 'No application-owned subtitle tracks reported.');
-    return;
+  } else {
+    metadataSubtitles.forEach((track) => {
+      const edit = createMetadataAction('Replace', 'ember-inline-action', () => openMetadataSubtitleForm(track), `Replace subtitle ${track.trackId}`);
+      const remove = createMetadataConfirmAction('Delete', () => deleteMetadataSubtitle(track), `Delete subtitle ${track.trackId}`);
+      const secondary = `${track.language.toUpperCase()} · ${track.label}${track.fileName ? ` · ${track.fileName}` : ''}`;
+      metadataSubtitlesList.appendChild(createMetadataTrackRow(track.trackId, secondary, [edit, remove]));
+    });
   }
-  metadataSubtitles.forEach((track) => {
-    const edit = createMetadataAction('Edit', 'ember-inline-action', () => {
-      clearMetadataFormError(metadataSubtitleError);
-      metadataSubtitleTrackId.value = track.trackId;
-      metadataSubtitleLanguage.value = track.language;
-      metadataSubtitleLabel.value = track.label;
-      metadataSubtitleUrl.value = track.url || '';
-      if (!track.url) showMetadataFormError(metadataSubtitleError, 'The server does not expose the original source URL. Enter a new HTTP(S) URL to replace this track.');
-      persistDeploymentDraft();
-    }, `Edit subtitle ${track.trackId}`);
-    const remove = createMetadataAction('Delete', 'ember-inline-action ember-inline-action--danger', () => deleteMetadataSubtitle(track), `Delete subtitle ${track.trackId}`);
-    const secondary = `${track.language.toUpperCase()} · ${track.label}${track.fileName ? ` · ${track.fileName}` : ''}`;
-    metadataSubtitlesList.appendChild(createMetadataTrackRow(track.trackId, secondary, [edit, remove]));
-  });
+  updateMetadataCounts();
+  updateMetadataControlAvailability();
+}
+
+function openMetadataAudioForm(track = null) {
+  metadataAudioEditLanguage = track ? track.language : '';
+  if (metadataAudioForm) metadataAudioForm.hidden = false;
+  if (btnMetadataAddAudio) btnMetadataAddAudio.hidden = true;
+  if (metadataAudioFormTitle) metadataAudioFormTitle.textContent = track ? `Replace ${track.language.toUpperCase()} dubbing` : 'Add dubbing';
+  if (metadataAudioCaptured) metadataAudioCaptured.value = '';
+  if (metadataAudioLanguage) metadataAudioLanguage.value = track ? track.language : '';
+  if (metadataAudioSourceType) metadataAudioSourceType.value = track ? track.sourceType : 'auto';
+  if (metadataAudioUrl) metadataAudioUrl.value = '';
+  clearMetadataFormError(metadataAudioError);
+  if (track) showMetadataFormError(metadataAudioError, 'Replacing this language requires a new HTTP(S) source. The existing source URL is not exposed.');
+  if (metadataAudioPanel) metadataAudioPanel.open = true;
+  updateMetadataControlAvailability();
+  const focusTarget = track ? metadataAudioUrl : metadataAudioLanguage;
+  if (focusTarget) focusTarget.focus();
+  persistDeploymentDraft();
+}
+
+function closeMetadataAudioForm() {
+  metadataAudioEditLanguage = '';
+  if (metadataAudioForm) metadataAudioForm.hidden = true;
+  if (btnMetadataAddAudio) btnMetadataAddAudio.hidden = false;
+  if (metadataAudioCaptured) metadataAudioCaptured.value = '';
+  if (metadataAudioLanguage) metadataAudioLanguage.value = '';
+  if (metadataAudioSourceType) metadataAudioSourceType.value = 'auto';
+  if (metadataAudioUrl) metadataAudioUrl.value = '';
+  clearMetadataFormError(metadataAudioError);
+  updateMetadataControlAvailability();
+  persistDeploymentDraft();
 }
 
 function renderMetadataAudio() {
@@ -2774,21 +3061,16 @@ function renderMetadataAudio() {
   metadataAudioList.replaceChildren();
   if (metadataAudioTracks.length === 0) {
     appendMetadataEmptyState(metadataAudioList, 'No application-owned external dubbing reported.');
-    return;
+  } else {
+    metadataAudioTracks.forEach((track) => {
+      const edit = createMetadataAction('Replace', 'ember-inline-action', () => openMetadataAudioForm(track), `Replace ${track.language} dubbing`);
+      const remove = createMetadataConfirmAction('Delete', () => deleteMetadataAudio(track), `Delete ${track.language} dubbing`);
+      const secondary = `${track.label} · ${track.sourceType === 'hls' ? 'HLS' : 'External'}${track.fileName ? ` · ${track.fileName}` : ''}`;
+      metadataAudioList.appendChild(createMetadataTrackRow(track.language.toUpperCase(), secondary, [edit, remove]));
+    });
   }
-  metadataAudioTracks.forEach((track) => {
-    const edit = createMetadataAction('Edit', 'ember-inline-action', () => {
-      clearMetadataFormError(metadataAudioError);
-      metadataAudioLanguage.value = track.language;
-      metadataAudioSourceType.value = track.sourceType || 'auto';
-      metadataAudioUrl.value = track.url || '';
-      if (!track.url) showMetadataFormError(metadataAudioError, 'The server does not expose the original source URL. Enter a new HTTP(S) URL to replace this dubbing track.');
-      persistDeploymentDraft();
-    }, `Edit ${track.language} dubbing`);
-    const remove = createMetadataAction('Delete', 'ember-inline-action ember-inline-action--danger', () => deleteMetadataAudio(track), `Delete ${track.language} dubbing`);
-    const secondary = `${track.label} · ${track.sourceType === 'hls' ? 'HLS' : 'External'}${track.fileName ? ` · ${track.fileName}` : ''}`;
-    metadataAudioList.appendChild(createMetadataTrackRow(track.language.toUpperCase(), secondary, [edit, remove]));
-  });
+  updateMetadataCounts();
+  updateMetadataControlAvailability();
 }
 
 function populateMetadataCapturedSources() {
@@ -2834,7 +3116,7 @@ function applyCapturedSubtitleToMetadataForm() {
   metadataSubtitleLanguage.value = language;
   metadataSubtitleLabel.value = label;
   metadataSubtitleUrl.value = selected.url;
-  metadataSubtitleTrackId.value = createStableSubtitleTrackId(language, label);
+  if (!metadataSubtitleEditId) metadataSubtitleTrackId.value = createStableSubtitleTrackId(language, label);
   clearMetadataFormError(metadataSubtitleError);
   persistDeploymentDraft();
 }
@@ -2842,10 +3124,19 @@ function applyCapturedSubtitleToMetadataForm() {
 function applyCapturedAudioToMetadataForm() {
   const selected = (availableAudios || []).find((track) => track.id === metadataAudioCaptured.value);
   if (!selected) return;
-  metadataAudioLanguage.value = selected.language === 'unknown' ? '' : selected.language;
+  const selectedLanguage = selected.language === 'unknown' ? '' : selected.language;
+  const existingTrack = metadataAudioTracks.find((track) => track.language === selectedLanguage);
+  if (existingTrack && !metadataAudioEditLanguage) {
+    metadataAudioEditLanguage = existingTrack.language;
+    if (metadataAudioFormTitle) metadataAudioFormTitle.textContent = `Replace ${existingTrack.language.toUpperCase()} dubbing`;
+    showMetadataFormError(metadataAudioError, 'This language already exists. Saving will replace its application-owned sidecar.');
+  }
+  if (!metadataAudioEditLanguage) metadataAudioLanguage.value = selected.language === 'unknown' ? '' : selected.language;
+  else metadataAudioLanguage.value = metadataAudioEditLanguage;
   metadataAudioSourceType.value = selected.sourceType === 'hls' ? 'hls' : 'auto';
   metadataAudioUrl.value = selected.audioUrl || '';
-  clearMetadataFormError(metadataAudioError);
+  if (!existingTrack) clearMetadataFormError(metadataAudioError);
+  updateMetadataControlAvailability();
   persistDeploymentDraft();
 }
 
@@ -2864,46 +3155,104 @@ function showMetadataFormError(element, message) {
   element.hidden = false;
 }
 
-async function loadMetadataEditor() {
+async function loadMetadataEditor(options = {}) {
   const identity = getCurrentMediaIdentity();
   const requestSequence = ++metadataLoadSequence;
-  if (metadataTargetId) metadataTargetId.textContent = identity ? identity.mediaId : 'Invalid media identity';
+  updateMetadataTargetSummary(identity);
+  resetMetadataRefreshConfirmation();
   if (!identity) {
-    setMetadataPanelState(metadataTargetPanel, metadataTargetStatus, 'error', 'A valid movie or episode identity is required.');
-    return;
+    setMetadataTargetState('error', 'A valid movie or episode identity is required.', 'Invalid target');
+    showMetadataBlockedState('error', 'Invalid StreamHome target', 'Choose a movie or a valid Season 0+ / Episode 1+ context before editing playback.', false);
+    return false;
   }
 
-  const pendingOperation = await findPendingMediaSenderOperation(identity.mediaId);
-  if (requestSequence !== metadataLoadSequence || deploymentMode !== 'metadata') return;
-  const loadingMessage = pendingOperation
-    ? `Waiting for ${String(pendingOperation.operation || 'metadata operation').replace(/_/g, ' ')} to finish...`
-    : 'Loading StreamHome-owned playback metadata...';
-  setMetadataPanelState(metadataTargetPanel, metadataTargetStatus, 'loading', loadingMessage);
+  const draftMarkers = cloneMetadataMarkers(metadataEditorMarkers);
+  const draftBaseline = cloneMetadataMarkers(metadataBaselineMarkers);
+  const canRestoreDirtyDraft = metadataMarkersDirty && metadataLoadedMediaId === identity.mediaId && options.discardDirty !== true;
+  metadataEditorReady = false;
+  setMetadataTargetState('loading', 'Loading StreamHome-owned playback metadata...', 'Loading');
+  showMetadataBlockedState('loading', 'Loading playback metadata', 'Checking the completed media state and application-owned sidecars.', false);
+  updateMetadataControlAvailability();
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const pendingOperation = await findPendingMediaSenderOperation(identity.mediaId);
+    if (requestSequence !== metadataLoadSequence || deploymentMode !== 'metadata') return false;
+    if (!pendingOperation || Date.now() - Number(pendingOperation.startedAt || 0) > 5 * 60 * 1000) break;
+    setMetadataTargetState('loading', `Waiting for ${String(pendingOperation.operation || 'metadata operation').replace(/_/g, ' ')}...`, 'Pending');
+    if (attempt === 19) {
+      showMetadataBlockedState('loading', 'StreamHome operation still running', 'The previous metadata operation has not finished yet. Retry after it completes.', true);
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
   const result = await sendMediaSenderRequest({ operation: 'get_metadata', mediaId: identity.mediaId });
-  if (requestSequence !== metadataLoadSequence || deploymentMode !== 'metadata') return;
+  if (requestSequence !== metadataLoadSequence || deploymentMode !== 'metadata') return false;
   if (!result.ok) {
-    const message = result.status === 404
-      ? 'Metadata read endpoint is unavailable or this media was not found.'
-      : describeMediaSenderError(result);
-    setMetadataPanelState(metadataTargetPanel, metadataTargetStatus, 'error', message);
-    return;
+    metadataSubtitles = [];
+    metadataAudioTracks = [];
+    metadataEditorReady = false;
+    metadataLoadedMediaId = '';
+    renderMetadataSubtitles();
+    renderMetadataAudio();
+    if (result.status === 409 || result.code === 'media_not_ready') {
+      const message = describeMediaSenderError(result);
+      setMetadataTargetState('not-ready', message, 'Not ready');
+      showMetadataBlockedState('not-ready', 'Playback editing unavailable', message, true);
+    } else {
+      const message = result.status === 404 && result.code !== 'media_not_found'
+        ? 'StreamHome does not expose the metadata read endpoint required by Edit playback.'
+        : describeMediaSenderError(result);
+      setMetadataTargetState('error', message, 'Load failed');
+      showMetadataBlockedState('error', 'Could not load playback metadata', message, true);
+    }
+    return false;
   }
 
   const metadata = normalizeMetadataResponse(result.data);
-  metadataEditorMarkers = metadata.skipMarkers;
+  if (!metadata.mutable || !['completed', 'ready', 'success'].includes(metadata.status)) {
+    const statusLabel = metadata.status || 'not mutable';
+    setMetadataTargetState('not-ready', `StreamHome reports this media as ${statusLabel}.`, 'Not ready');
+    showMetadataBlockedState('not-ready', 'Playback editing unavailable', 'Only completed canonical media can be edited. Retry after ingestion finishes.', true);
+    return false;
+  }
+  metadataBaselineMarkers = cloneMetadataMarkers(metadata.skipMarkers);
+  const serverFingerprint = metadataMarkerFingerprint(metadataBaselineMarkers);
+  const dirtyDraftConflict = canRestoreDirtyDraft && metadataMarkerFingerprint(draftBaseline) !== serverFingerprint;
+  if (canRestoreDirtyDraft && metadataMarkerFingerprint(draftBaseline) === serverFingerprint) {
+    metadataEditorMarkers = draftMarkers;
+    metadataMarkersDirty = metadataMarkerFingerprint(draftMarkers) !== serverFingerprint;
+  } else {
+    metadataEditorMarkers = cloneMetadataMarkers(metadataBaselineMarkers);
+    metadataMarkersDirty = false;
+  }
   metadataSubtitles = metadata.subtitles;
   metadataAudioTracks = metadata.audio;
+  metadataLoadedMediaId = identity.mediaId;
   renderMetadataMarkers();
   renderMetadataSubtitles();
   renderMetadataAudio();
-  setMetadataPanelState(metadataTargetPanel, metadataTargetStatus, 'success', 'Playback metadata loaded from StreamHome.');
-  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'idle', `${countSkipMarkers(metadataEditorMarkers)} marker ranges loaded.`);
-  setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'idle', `${metadataSubtitles.length} application-owned subtitle tracks loaded.`);
-  setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'idle', `${metadataAudioTracks.length} external dubbing tracks loaded.`);
+  showMetadataEditorSections();
+  setMetadataTargetState('success', 'Playback metadata loaded from StreamHome.', 'Completed');
+  setMetadataPanelState(
+    metadataMarkersPanel,
+    metadataMarkersStatus,
+    dirtyDraftConflict ? 'error' : (metadataMarkersDirty ? 'dirty' : 'idle'),
+    dirtyDraftConflict
+      ? 'StreamHome changed since the local draft; stale marker edits were discarded.'
+      : (metadataMarkersDirty
+        ? 'Unsaved marker changes restored.'
+        : `${countSkipMarkers(metadataEditorMarkers)} marker range${countSkipMarkers(metadataEditorMarkers) === 1 ? '' : 's'} loaded.`)
+  );
+  setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'idle', `${metadataSubtitles.length} application-owned subtitle track${metadataSubtitles.length === 1 ? '' : 's'}.`);
+  setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'idle', `${metadataAudioTracks.length} external dubbing track${metadataAudioTracks.length === 1 ? '' : 's'}.`);
+  updateMetadataCounts();
   persistDeploymentDraft();
+  return true;
 }
 
 function addMetadataMarker() {
+  if (!metadataEditorReady || metadataMutationBusy) return;
   clearMetadataFormError(metadataMarkerError);
   const type = metadataMarkerType ? metadataMarkerType.value : '';
   const startMs = parseSkipMarkerClock(metadataMarkerStart ? metadataMarkerStart.value : '');
@@ -2930,13 +3279,13 @@ function addMetadataMarker() {
   metadataMarkerStart.value = '';
   metadataMarkerEnd.value = '';
   renderMetadataMarkers();
-  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'idle', 'Unsaved marker changes. Replace all to publish them.');
-  persistDeploymentDraft();
+  markMetadataMarkersDirty('Unsaved marker range. Save changes to publish it.');
 }
 
 async function replaceMetadataMarkers() {
   const identity = getCurrentMediaIdentity();
-  if (!identity) return;
+  if (!identity || !metadataEditorReady || metadataMutationBusy || !metadataMarkersDirty) return;
+  setMetadataMutationBusy(true);
   setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'loading', 'Replacing the complete marker document...');
   const result = await sendMediaSenderRequest({
     operation: 'replace_markers',
@@ -2944,13 +3293,26 @@ async function replaceMetadataMarkers() {
     body: { skip_markers: normalizeServerSkipMarkers(metadataEditorMarkers) }
   });
   if (!result.ok) {
+    setMetadataMutationBusy(false);
     setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'error', describeMediaSenderError(result));
     return;
   }
-  const responseMarkers = result.data && (result.data.skipMarkers || result.data.skip_markers);
-  if (responseMarkers) metadataEditorMarkers = normalizeServerSkipMarkers(responseMarkers);
+  metadataBaselineMarkers = cloneMetadataMarkers(metadataEditorMarkers);
+  metadataMarkersDirty = false;
+  persistDeploymentDraft();
+  setMetadataMutationBusy(false);
+  const reloaded = await loadMetadataEditor({ force: true, discardDirty: true });
+  if (reloaded) setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'success', 'Skip-marker changes saved without retransmitting video.');
+}
+
+function discardMetadataMarkers() {
+  if (!metadataEditorReady || metadataMutationBusy || !metadataMarkersDirty) return;
+  metadataEditorMarkers = cloneMetadataMarkers(metadataBaselineMarkers);
+  metadataMarkersDirty = false;
+  clearMetadataFormError(metadataMarkerError);
+  resetMetadataClearConfirmation();
   renderMetadataMarkers();
-  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'success', 'All skip markers were replaced without retransmitting video.');
+  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'idle', `${countSkipMarkers(metadataEditorMarkers)} marker ranges restored from StreamHome.`);
   persistDeploymentDraft();
 }
 
@@ -2962,6 +3324,7 @@ function resetMetadataClearConfirmation() {
 }
 
 async function clearMetadataMarkers() {
+  if (!metadataEditorReady || metadataMutationBusy || countSkipMarkers(metadataEditorMarkers) === 0) return;
   if (!metadataClearMarkersArmed) {
     metadataClearMarkersArmed = true;
     btnMetadataClearMarkers.textContent = 'Confirm clear';
@@ -2969,18 +3332,9 @@ async function clearMetadataMarkers() {
     return;
   }
   resetMetadataClearConfirmation();
-  const identity = getCurrentMediaIdentity();
-  if (!identity) return;
-  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'loading', 'Clearing every skip marker...');
-  const result = await sendMediaSenderRequest({ operation: 'replace_markers', mediaId: identity.mediaId, body: { skip_markers: {} } });
-  if (!result.ok) {
-    setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'error', describeMediaSenderError(result));
-    return;
-  }
   metadataEditorMarkers = createEmptySkipMarkers();
   renderMetadataMarkers();
-  setMetadataPanelState(metadataMarkersPanel, metadataMarkersStatus, 'success', 'Every skip marker was cleared.');
-  persistDeploymentDraft();
+  markMetadataMarkersDirty('All markers removed locally. Save changes to publish.');
 }
 
 function getCapturedHeadersForUrl(url) {
@@ -2991,13 +3345,21 @@ function getCapturedHeadersForUrl(url) {
 async function saveMetadataSubtitle() {
   clearMetadataFormError(metadataSubtitleError);
   const identity = getCurrentMediaIdentity();
-  if (!identity) {
+  if (!identity || !metadataEditorReady || metadataMutationBusy) {
     showMetadataFormError(metadataSubtitleError, 'A valid StreamHome media identity is required.');
     return;
   }
   const trackId = String(metadataSubtitleTrackId.value || '').trim();
   const language = String(metadataSubtitleLanguage.value || '').trim().replace(/_/g, '-').toLowerCase();
   const label = String(metadataSubtitleLabel.value || '').trim();
+  if (metadataSubtitleEditId && trackId !== metadataSubtitleEditId) {
+    showMetadataFormError(metadataSubtitleError, 'Track ID cannot change while replacing an existing subtitle.');
+    return;
+  }
+  if (!metadataSubtitleEditId && metadataSubtitles.some((track) => track.trackId === trackId)) {
+    showMetadataFormError(metadataSubtitleError, 'That track ID already exists. Use its Replace action or choose a new ID.');
+    return;
+  }
   let url;
   try {
     url = requireHttpSourceUrl(metadataSubtitleUrl.value, 'Subtitle source');
@@ -3013,6 +3375,7 @@ async function saveMetadataSubtitle() {
     showMetadataFormError(metadataSubtitleError, 'Enter a valid language tag and label.');
     return;
   }
+  setMetadataMutationBusy(true);
   setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'loading', `Saving subtitle ${trackId}...`);
   const result = await sendMediaSenderRequest({
     operation: 'put_subtitle',
@@ -3021,43 +3384,49 @@ async function saveMetadataSubtitle() {
     body: { language, label, url, headers: getCapturedHeadersForUrl(url) }
   });
   if (!result.ok) {
+    setMetadataMutationBusy(false);
     setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'error', describeMediaSenderError(result));
     return;
   }
-  const returnedTracks = result.data && Array.isArray(result.data.subtitles) ? result.data.subtitles.map(normalizeServerSubtitle).filter(Boolean) : null;
-  if (returnedTracks) metadataSubtitles = returnedTracks;
-  else {
-    const returned = normalizeServerSubtitle(result.data && result.data.subtitle) || { trackId, language, label, url, fileName: '' };
-    returned.url = returned.url || url;
-    metadataSubtitles = metadataSubtitles.filter((track) => track.trackId !== trackId);
-    metadataSubtitles.push(returned);
-  }
-  renderMetadataSubtitles();
-  setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'success', `Subtitle ${trackId} was added or replaced.`);
+  closeMetadataSubtitleForm();
+  setMetadataMutationBusy(false);
+  const reloaded = await loadMetadataEditor({ force: true, discardDirty: true });
+  if (reloaded) setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'success', `Subtitle ${trackId} was added or replaced.`);
 }
 
 async function deleteMetadataSubtitle(track) {
   const identity = getCurrentMediaIdentity();
-  if (!identity) return;
+  if (!identity || !metadataEditorReady || metadataMutationBusy) return;
+  setMetadataMutationBusy(true);
   setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'loading', `Deleting subtitle ${track.trackId}...`);
   const result = await sendMediaSenderRequest({ operation: 'delete_subtitle', mediaId: identity.mediaId, trackId: track.trackId });
   if (!result.ok) {
+    setMetadataMutationBusy(false);
     setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'error', describeMediaSenderError(result));
     return;
   }
-  metadataSubtitles = metadataSubtitles.filter((item) => item.trackId !== track.trackId);
-  renderMetadataSubtitles();
-  setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'success', `Subtitle ${track.trackId} was deleted.`);
+  if (metadataSubtitleEditId === track.trackId) closeMetadataSubtitleForm();
+  setMetadataMutationBusy(false);
+  const reloaded = await loadMetadataEditor({ force: true, discardDirty: true });
+  if (reloaded) setMetadataPanelState(metadataSubtitlesPanel, metadataSubtitlesStatus, 'success', `Subtitle ${track.trackId} was deleted.`);
 }
 
 async function saveMetadataAudio() {
   clearMetadataFormError(metadataAudioError);
   const identity = getCurrentMediaIdentity();
-  if (!identity) {
+  if (!identity || !metadataEditorReady || metadataMutationBusy) {
     showMetadataFormError(metadataAudioError, 'A valid StreamHome media identity is required.');
     return;
   }
   const language = String(metadataAudioLanguage.value || '').trim().replace(/_/g, '-').toLowerCase();
+  if (metadataAudioEditLanguage && language !== metadataAudioEditLanguage) {
+    showMetadataFormError(metadataAudioError, 'Language cannot change while replacing an existing dubbing sidecar.');
+    return;
+  }
+  if (!metadataAudioEditLanguage && metadataAudioTracks.some((track) => track.language === language)) {
+    showMetadataFormError(metadataAudioError, 'That language already exists. Use its Replace action instead.');
+    return;
+  }
   let url;
   try {
     url = requireHttpSourceUrl(metadataAudioUrl.value, 'Dubbing source');
@@ -3070,6 +3439,7 @@ async function saveMetadataAudio() {
     return;
   }
   const sourceType = metadataAudioSourceType.value === 'hls' ? 'hls' : 'auto';
+  setMetadataMutationBusy(true);
   setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'loading', `Saving ${language} dubbing...`);
   const result = await sendMediaSenderRequest({
     operation: 'put_audio',
@@ -3078,31 +3448,31 @@ async function saveMetadataAudio() {
     body: { url, source_type: sourceType, headers: getCapturedHeadersForUrl(url) }
   });
   if (!result.ok) {
+    setMetadataMutationBusy(false);
     setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'error', describeMediaSenderError(result));
     return;
   }
-  const returned = normalizeServerAudioTrack(result.data && result.data.audio)
-    || { language, label: getSubtitleLanguageName(language), url, sourceType, fileName: '' };
-  returned.url = returned.url || url;
-  returned.sourceType = sourceType;
-  metadataAudioTracks = metadataAudioTracks.filter((track) => track.language !== returned.language);
-  metadataAudioTracks.push(returned);
-  renderMetadataAudio();
-  setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'success', `${language.toUpperCase()} dubbing was added or replaced.`);
+  closeMetadataAudioForm();
+  setMetadataMutationBusy(false);
+  const reloaded = await loadMetadataEditor({ force: true, discardDirty: true });
+  if (reloaded) setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'success', `${language.toUpperCase()} dubbing was added or replaced.`);
 }
 
 async function deleteMetadataAudio(track) {
   const identity = getCurrentMediaIdentity();
-  if (!identity) return;
+  if (!identity || !metadataEditorReady || metadataMutationBusy) return;
+  setMetadataMutationBusy(true);
   setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'loading', `Deleting ${track.language} dubbing...`);
   const result = await sendMediaSenderRequest({ operation: 'delete_audio', mediaId: identity.mediaId, language: track.language });
   if (!result.ok) {
+    setMetadataMutationBusy(false);
     setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'error', describeMediaSenderError(result));
     return;
   }
-  metadataAudioTracks = metadataAudioTracks.filter((item) => item.language !== track.language);
-  renderMetadataAudio();
-  setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'success', `${track.language.toUpperCase()} dubbing was deleted.`);
+  if (metadataAudioEditLanguage === track.language) closeMetadataAudioForm();
+  setMetadataMutationBusy(false);
+  const reloaded = await loadMetadataEditor({ force: true, discardDirty: true });
+  if (reloaded) setMetadataPanelState(metadataAudioPanel, metadataAudioStatus, 'success', `${track.language.toUpperCase()} dubbing was deleted.`);
 }
 
 async function deployMetadataPayload() {

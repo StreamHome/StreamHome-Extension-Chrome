@@ -398,82 +398,113 @@
       </section>
       </div>
 
-      <div id="metadata-workspace" class="metadata-workspace hidden" role="tabpanel" aria-labelledby="btn-mode-metadata">
+      <div id="metadata-workspace" class="metadata-workspace hidden" role="tabpanel" aria-labelledby="btn-mode-metadata" hidden>
         <section id="metadata-target-panel" class="metadata-target-panel" data-state="idle" aria-labelledby="metadata-target-title">
           <div class="metadata-panel-heading">
             <div>
               <span id="metadata-target-title" class="metadata-panel-title">StreamHome target</span>
               <span id="metadata-target-status" class="metadata-panel-status" aria-live="polite">Select Edit playback to load server-owned playback metadata.</span>
             </div>
-            <button id="btn-metadata-refresh" type="button" class="ember-inline-action">Refresh</button>
+            <button id="btn-metadata-refresh" type="button" class="ember-inline-action" disabled>Refresh</button>
           </div>
           <div class="metadata-target-identity">
-            <code id="metadata-target-id">-</code>
-            <span>Completed canonical media required</span>
+            <div>
+              <strong id="metadata-target-name">Selected media</strong>
+              <span id="metadata-target-context">Completed canonical media required</span>
+            </div>
+            <div class="metadata-target-code">
+              <code id="metadata-target-id">-</code>
+              <span id="metadata-target-badge" class="metadata-status-badge" data-state="idle">Not loaded</span>
+            </div>
           </div>
         </section>
 
-        <section id="metadata-markers-panel" class="metadata-editor-panel" data-state="idle" aria-labelledby="metadata-markers-title">
-          <div class="metadata-panel-heading">
-            <div>
-              <span id="metadata-markers-title" class="metadata-panel-title">Skip markers</span>
-              <span id="metadata-markers-status" class="metadata-panel-status" aria-live="polite">Load metadata before editing markers.</span>
-            </div>
-          </div>
-          <div id="metadata-markers-list" class="metadata-track-list"></div>
-          <div class="metadata-marker-fields">
-            <label for="metadata-marker-type"><span>Marker</span><select id="metadata-marker-type"><option value="intro">Intro</option><option value="recap">Recap</option><option value="credits">Credits</option><option value="preview">Preview</option></select></label>
-            <label for="metadata-marker-start"><span>Start</span><input id="metadata-marker-start" type="text" inputmode="numeric" autocomplete="off" placeholder="00:00:00" /></label>
-            <label for="metadata-marker-end"><span>End</span><input id="metadata-marker-end" type="text" inputmode="numeric" autocomplete="off" placeholder="00:00:00" /></label>
-          </div>
-          <p id="metadata-marker-error" class="metadata-editor-error" role="alert" hidden></p>
-          <div class="metadata-panel-actions">
-            <button id="btn-metadata-add-marker" type="button" class="ember-inline-action">Add range</button>
-            <button id="btn-metadata-replace-markers" type="button" class="ember-inline-action ember-inline-action--primary">Replace all</button>
-            <button id="btn-metadata-clear-markers" type="button" class="ember-inline-action ember-inline-action--danger">Clear all</button>
-          </div>
+        <section id="metadata-blocked-state" class="metadata-blocked-state" data-state="loading" aria-live="polite">
+          <strong id="metadata-blocked-title">Loading playback metadata</strong>
+          <span id="metadata-blocked-message">Waiting for StreamHome to return the completed media state.</span>
+          <button id="btn-metadata-blocked-retry" type="button" class="ember-inline-action" hidden>Retry</button>
         </section>
 
-        <section id="metadata-subtitles-panel" class="metadata-editor-panel" data-state="idle" aria-labelledby="metadata-subtitles-title">
-          <div class="metadata-panel-heading">
-            <div>
-              <span id="metadata-subtitles-title" class="metadata-panel-title">Subtitle sidecars</span>
-              <span id="metadata-subtitles-status" class="metadata-panel-status" aria-live="polite">Add, replace, or remove one application-owned track.</span>
+        <div id="metadata-editor-sections" class="metadata-editor-sections" hidden>
+        <details id="metadata-markers-panel" class="metadata-editor-panel" data-state="idle" data-metadata-section open>
+          <summary class="metadata-section-summary">
+            <span><strong id="metadata-markers-title">Skip markers</strong><small id="metadata-markers-status" aria-live="polite">Server values loaded.</small></span>
+            <span id="metadata-markers-count" class="metadata-count-badge">0</span>
+          </summary>
+          <div class="metadata-section-body">
+            <div id="metadata-markers-list" class="metadata-track-list"></div>
+            <div class="metadata-marker-fields">
+              <label for="metadata-marker-type"><span>Marker</span><select id="metadata-marker-type" disabled><option value="intro">Intro</option><option value="recap">Recap</option><option value="credits">Credits</option><option value="preview">Preview</option></select></label>
+              <label for="metadata-marker-start"><span>Start</span><input id="metadata-marker-start" type="text" inputmode="numeric" autocomplete="off" placeholder="00:00:00" disabled /></label>
+              <label for="metadata-marker-end"><span>End</span><input id="metadata-marker-end" type="text" inputmode="numeric" autocomplete="off" placeholder="00:00:00" disabled /></label>
+            </div>
+            <p id="metadata-marker-error" class="metadata-editor-error" role="alert" hidden></p>
+            <div class="metadata-panel-actions metadata-panel-actions--spread">
+              <button id="btn-metadata-add-marker" type="button" class="ember-inline-action" disabled>Add range</button>
+              <span class="metadata-action-group">
+                <button id="btn-metadata-discard-markers" type="button" class="ember-inline-action" disabled>Discard</button>
+                <button id="btn-metadata-clear-markers" type="button" class="ember-inline-action ember-inline-action--danger" disabled>Clear all</button>
+                <button id="btn-metadata-replace-markers" type="button" class="ember-inline-action ember-inline-action--primary" disabled>Save changes</button>
+              </span>
             </div>
           </div>
-          <div id="metadata-subtitles-list" class="metadata-track-list"></div>
-          <div class="metadata-form-grid">
-            <label class="metadata-field-wide" for="metadata-subtitle-captured"><span>Captured source</span><select id="metadata-subtitle-captured"><option value="">Choose a detected subtitle</option></select></label>
-            <label for="metadata-subtitle-track-id"><span>Track ID</span><input id="metadata-subtitle-track-id" type="text" maxlength="64" autocomplete="off" placeholder="en-main" /></label>
-            <label for="metadata-subtitle-language"><span>Language</span><input id="metadata-subtitle-language" type="text" maxlength="35" autocomplete="off" placeholder="en" /></label>
-            <label class="metadata-field-wide" for="metadata-subtitle-label"><span>Label</span><input id="metadata-subtitle-label" type="text" maxlength="80" autocomplete="off" placeholder="English CC" /></label>
-            <label class="metadata-field-wide" for="metadata-subtitle-url"><span>Source URL</span><input id="metadata-subtitle-url" type="url" placeholder="https://media.example/subtitle.vtt" /></label>
-          </div>
-          <p id="metadata-subtitle-error" class="metadata-editor-error" role="alert" hidden></p>
-          <div class="metadata-panel-actions">
-            <button id="btn-metadata-save-subtitle" type="button" class="ember-inline-action ember-inline-action--primary">Add / replace</button>
-          </div>
-        </section>
+        </details>
 
-        <section id="metadata-audio-panel" class="metadata-editor-panel" data-state="idle" aria-labelledby="metadata-audio-title">
-          <div class="metadata-panel-heading">
-            <div>
-              <span id="metadata-audio-title" class="metadata-panel-title">Dubbing sidecars</span>
-              <span id="metadata-audio-status" class="metadata-panel-status" aria-live="polite">Add, replace, or remove one external language.</span>
+        <details id="metadata-subtitles-panel" class="metadata-editor-panel" data-state="idle" data-metadata-section>
+          <summary class="metadata-section-summary">
+            <span><strong id="metadata-subtitles-title">Subtitle sidecars</strong><small id="metadata-subtitles-status" aria-live="polite">Application-owned tracks only.</small></span>
+            <span id="metadata-subtitles-count" class="metadata-count-badge">0</span>
+          </summary>
+          <div class="metadata-section-body">
+            <div id="metadata-subtitles-list" class="metadata-track-list"></div>
+            <div class="metadata-list-actions">
+              <button id="btn-metadata-add-subtitle" type="button" class="ember-inline-action ember-inline-action--primary" disabled>Add subtitle</button>
+            </div>
+            <div id="metadata-subtitle-form" class="metadata-editor-form" hidden>
+              <div class="metadata-form-heading"><strong id="metadata-subtitle-form-title">Add subtitle</strong><span>Downloads a new application-owned sidecar.</span></div>
+              <div class="metadata-form-grid">
+                <label class="metadata-field-wide" for="metadata-subtitle-captured"><span>Captured source</span><select id="metadata-subtitle-captured" disabled><option value="">Choose a detected subtitle</option></select></label>
+                <label for="metadata-subtitle-track-id"><span>Track ID</span><input id="metadata-subtitle-track-id" type="text" maxlength="64" autocomplete="off" placeholder="en-main" disabled /></label>
+                <label for="metadata-subtitle-language"><span>Language</span><input id="metadata-subtitle-language" type="text" maxlength="35" autocomplete="off" placeholder="en" disabled /></label>
+                <label class="metadata-field-wide" for="metadata-subtitle-label"><span>Label</span><input id="metadata-subtitle-label" type="text" maxlength="80" autocomplete="off" placeholder="English CC" disabled /></label>
+                <label class="metadata-field-wide" for="metadata-subtitle-url"><span>Replacement source URL</span><input id="metadata-subtitle-url" type="url" placeholder="https://media.example/subtitle.vtt" disabled /></label>
+              </div>
+              <p id="metadata-subtitle-error" class="metadata-editor-error" role="alert" hidden></p>
+              <div class="metadata-panel-actions">
+                <button id="btn-metadata-cancel-subtitle" type="button" class="ember-inline-action" disabled>Cancel</button>
+                <button id="btn-metadata-save-subtitle" type="button" class="ember-inline-action ember-inline-action--primary" disabled>Save subtitle</button>
+              </div>
             </div>
           </div>
-          <div id="metadata-audio-list" class="metadata-track-list"></div>
-          <div class="metadata-form-grid">
-            <label class="metadata-field-wide" for="metadata-audio-captured"><span>Captured source</span><select id="metadata-audio-captured"><option value="">Choose a detected dubbing track</option></select></label>
-            <label for="metadata-audio-language"><span>Language</span><input id="metadata-audio-language" type="text" maxlength="35" autocomplete="off" placeholder="tr" /></label>
-            <label for="metadata-audio-source-type"><span>Source type</span><select id="metadata-audio-source-type"><option value="auto">Auto</option><option value="hls">HLS</option></select></label>
-            <label class="metadata-field-wide" for="metadata-audio-url"><span>Source URL</span><input id="metadata-audio-url" type="url" placeholder="https://media.example/audio.m4a" /></label>
+        </details>
+
+        <details id="metadata-audio-panel" class="metadata-editor-panel" data-state="idle" data-metadata-section>
+          <summary class="metadata-section-summary">
+            <span><strong id="metadata-audio-title">Dubbing sidecars</strong><small id="metadata-audio-status" aria-live="polite">External application-owned languages only.</small></span>
+            <span id="metadata-audio-count" class="metadata-count-badge">0</span>
+          </summary>
+          <div class="metadata-section-body">
+            <div id="metadata-audio-list" class="metadata-track-list"></div>
+            <div class="metadata-list-actions">
+              <button id="btn-metadata-add-audio" type="button" class="ember-inline-action ember-inline-action--primary" disabled>Add dubbing</button>
+            </div>
+            <div id="metadata-audio-form" class="metadata-editor-form" hidden>
+              <div class="metadata-form-heading"><strong id="metadata-audio-form-title">Add dubbing</strong><span>Downloads a new external audio sidecar.</span></div>
+              <div class="metadata-form-grid">
+                <label class="metadata-field-wide" for="metadata-audio-captured"><span>Captured source</span><select id="metadata-audio-captured" disabled><option value="">Choose a detected dubbing track</option></select></label>
+                <label for="metadata-audio-language"><span>Language</span><input id="metadata-audio-language" type="text" maxlength="35" autocomplete="off" placeholder="tr" disabled /></label>
+                <label for="metadata-audio-source-type"><span>Source type</span><select id="metadata-audio-source-type" disabled><option value="auto">Auto</option><option value="hls">HLS</option></select></label>
+                <label class="metadata-field-wide" for="metadata-audio-url"><span>Replacement source URL</span><input id="metadata-audio-url" type="url" placeholder="https://media.example/audio.m4a" disabled /></label>
+              </div>
+              <p id="metadata-audio-error" class="metadata-editor-error" role="alert" hidden></p>
+              <div class="metadata-panel-actions">
+                <button id="btn-metadata-cancel-audio" type="button" class="ember-inline-action" disabled>Cancel</button>
+                <button id="btn-metadata-save-audio" type="button" class="ember-inline-action ember-inline-action--primary" disabled>Save dubbing</button>
+              </div>
+            </div>
           </div>
-          <p id="metadata-audio-error" class="metadata-editor-error" role="alert" hidden></p>
-          <div class="metadata-panel-actions">
-            <button id="btn-metadata-save-audio" type="button" class="ember-inline-action ember-inline-action--primary">Add / replace</button>
-          </div>
-        </section>
+        </details>
+        </div>
       </div>
     </div>
 
