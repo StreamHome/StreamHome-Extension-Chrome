@@ -8,6 +8,13 @@ The StreamHome Chrome extension is operational. The deployment workspace now
 separates new ingestion from completed-playback metadata editing. The latest
 completed work is:
 
+- `fddd7a9`: completed the Edit playback workspace with a canonical
+  load-before-edit state model, completed/not-ready/error/loading target
+  states, single-open Ember accordions, marker save/discard/confirmed-clear
+  behavior, explicit subtitle and dubbing add/replace forms, immutable replace
+  identifiers, confirmed deletes, globally locked mutations, canonical reloads
+  after every write, conflict-safe dirty marker drafts, and form-mode draft
+  restoration.
 - `26f2cb1`: moved preview opening into the service worker so captured
   Referer, Origin, User-Agent, Cookie, and Authorization headers are installed
   before player navigation, scoped to the created tab, kept out of the player
@@ -130,13 +137,19 @@ The nine issues from the earlier capture audit remain resolved, including OPTION
 - The deployment surface has keyboard-operable New ingestion and Edit playback
   tabs. Edit playback derives `m_<tmdb>` or
   `ep_<tmdb>_s<season>_e<episode>`, hides listening and ingestion actions, and
-  loads server-owned playback metadata. It can replace the complete marker
-  document, add/replace/delete application-owned subtitle sidecars, and
-  add/replace/delete application-owned external dubbing sidecars without
-  retransmitting the main video. General playback language lists are never
-  treated as deletable sidecars. The current server reference does not define
-  the required GET read route, so unsupported servers receive an explicit
-  compatibility error.
+  keeps every editor hidden and disabled until canonical server metadata is
+  loaded for a completed mutable target. Its compact target card and three
+  single-open accordions expose skip markers, application-owned subtitle
+  sidecars, and application-owned external dubbing sidecars. Marker edits are
+  local until Save changes; Discard restores the server baseline and Clear all
+  requires confirmation. Track replacement locks the track ID or language,
+  requires a new HTTP(S) source, and deletion requires inline confirmation.
+  Every successful mutation reloads canonical server state, while all editor
+  controls are locked during a write. Dirty marker drafts are restored only
+  when their saved baseline still matches StreamHome. General playback
+  language lists are never treated as deletable sidecars. The current server
+  reference does not define the required GET read route, so unsupported
+  servers receive an explicit compatibility error.
 - Series streams are stored per episode so navigating between episodes does not leak streams across episode boundaries.
 - Preview playback supports HLS.js, dash.js, and direct media. When a selected
   dubbing URL belongs to the HLS master, the player matches it by URL with

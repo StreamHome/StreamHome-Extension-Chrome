@@ -227,11 +227,23 @@ summaries are serialized in local storage so the popup can report work that
 outlives its window without persisting secrets or source data.
 
 Edit playback calls `GET /api/media/{media_id}/metadata` before presenting
-server-owned collections. The current server reference documents mutation on
-that path but not this read method, so a missing GET is an explicit
-compatibility state. Only external-audio collections are normalized as
-editable dubbing; a general `languages` result is never interpreted as
-deletable sidecar ownership.
+server-owned collections. Loading, not-ready, and failure states hide and lock
+the editors; only a completed mutable response reveals them. The three editor
+sections are native details elements with one section open at a time. Marker
+changes use a server baseline plus a local dirty document and are published
+only by Save changes. A restored dirty document is retained only when its
+saved baseline fingerprint still matches the newly loaded canonical server
+document. Subtitle track IDs and dubbing language keys are immutable during a
+replace, destructive operations require a second inline confirmation, and all
+controls are locked while a mutation is pending. Every successful PATCH, PUT,
+or DELETE is followed by canonical GET rather than optimistic collection
+mutation. Pending service-worker operation summaries are polled briefly before
+the read so popup closure does not immediately race an unfinished write.
+
+The current server reference documents mutation on the metadata path but not
+this read method, so a missing GET is an explicit compatibility state. Only
+external-audio collections are normalized as editable dubbing; a general
+`languages` result is never interpreted as deletable sidecar ownership.
 
 New ingestion starts TheIntroDB lookup when the deployment surface opens and
 renders loading, ready, empty, or error state with marker details.

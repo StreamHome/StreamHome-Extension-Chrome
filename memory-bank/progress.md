@@ -43,6 +43,11 @@ Last verified: 2026-08-13
 - MediaSender ingestion alignment, an allowlisted service-worker client, and an
   Ember completed-playback editor for skip markers, subtitle sidecars, and
   external dubbing sidecars (`64671c3`, `b8a8e91`, `1dd3532`).
+- Completed Edit playback state and UI: canonical load gating, explicit
+  completed/not-ready/error/loading states, single-open accordions, marker
+  save/discard/confirmed-clear, immutable subtitle/dubbing replace identities,
+  confirmed deletion, mutation-wide control locking, canonical post-write
+  reloads, and conflict-safe draft restoration (`fddd7a9`).
 
 ### Preview surfaces
 
@@ -207,6 +212,15 @@ Last verified: 2026-08-13
   created tab and both video/audio hosts, navigation waits for installation,
   and tab closure removes the rules. All three changed scripts passed syntax
   checks and `git diff --check`.
+- Completed Edit playback checks passed the Tailwind build, `node --check popup.js`,
+  136 unique HTML IDs against 127 JavaScript lookups with no missing
+  contracts, and `git diff --check`. A 410 x 600 browser fixture covered
+  canonical success, loading, 409 not-ready, and 503 failure states; marker
+  add/remove/discard/confirmed-clear/save; subtitle and HLS dubbing
+  add/replace/delete; canonical reload after writes; dirty refresh protection;
+  keyboard tab and accordion behavior; one vertical scroll region; zero
+  horizontal overflow; and no console diagnostics. The fixture used a mocked
+  metadata endpoint rather than a real StreamHome server.
 
 ## Next candidates
 

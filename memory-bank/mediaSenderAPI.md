@@ -1,6 +1,6 @@
 # StreamHome MediaSender Contract
 
-Last verified: 2026-08-11
+Last verified: 2026-08-13
 
 This document records the contract implemented by the Chrome extension. The
 StreamHome reference in `StreamHome-memory-bank/mediasenderAPI.md` remains the
@@ -97,6 +97,14 @@ skip markers, application-owned subtitle sidecars, and application-owned
 external dubbing sidecars before replacing or deleting them. The extension
 currently calls this route and accepts camelCase or snake_case collection
 names for those three application-owned groups.
+
+The response may wrap the collections in `metadata` or return them at the top
+level. `status` should identify a completed/ready/success state and `mutable`
+should be `true`; absent values remain compatible with the original collection
+shape, but explicit non-ready or immutable values keep all editors blocked.
+The extension reloads this route after every successful PATCH, PUT, or DELETE
+and treats that read as canonical rather than applying an optimistic local
+collection update.
 
 The current StreamHome reference document defines `PATCH` on this path but
 does not yet document `GET`. Therefore this is an explicit compatibility

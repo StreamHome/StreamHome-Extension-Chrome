@@ -196,3 +196,20 @@ explicit read endpoint; general playback language lists are not treated as
 deletable external tracks. Because the current StreamHome reference documents
 `PATCH` but not `GET /api/media/{media_id}/metadata`, absence of that read route
 is shown as a compatibility error instead of being hidden or guessed.
+
+## 25. Treat canonical metadata as the Edit playback source of truth
+
+An editor cannot safely replace complete marker documents or delete
+application-owned sidecars from stale or inferred playback lists. Edit
+playback therefore remains blocked until the canonical metadata read succeeds
+for a completed mutable media ID. Marker edits keep an explicit server
+baseline, stay local until Save changes, and are discarded on restoration if
+StreamHome changed underneath the draft. Subtitle track IDs and external-audio
+language keys cannot change during replacement, and deletion uses an inline
+second confirmation.
+
+Mutation responses are acknowledgements, not a replacement for server state.
+All metadata controls lock during a write and every successful PATCH, PUT, or
+DELETE is followed by canonical GET before the editor becomes interactive
+again. The UI uses a compact target summary plus three single-open native
+accordions so these states remain legible at 410 x 600 without nested scrolling.
